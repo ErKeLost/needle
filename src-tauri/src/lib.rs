@@ -1,3 +1,4 @@
+mod auth;
 mod cache;
 mod netease;
 mod qq;
@@ -15,7 +16,8 @@ pub fn run() {
             qq::qq_lyric,
             qq::qq_stream,
             cache::cache_usage,
-            cache::cache_clear
+            cache::cache_clear,
+            auth::open_login
         ])
         .run(tauri::generate_context!())
         .expect("error while running Needle");

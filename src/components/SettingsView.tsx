@@ -136,6 +136,7 @@ export function SettingsView({
             ].map((account) => (
               <AccountRow
                 key={account.id}
+                service={account.id}
                 name={account.name}
                 hint={account.hint}
                 where={account.where}
@@ -432,18 +433,58 @@ function bytes(value: number): string {
   return `${(mb / 1024).toFixed(1)} GB`;
 }
 
+function LoginButton({
+  service,
+  onDone,
+  disabled,
+}: {
+  service: string;
+  onDone: (value: string) => void;
+  disabled?: boolean;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <>
+      <Button
+        size="sm"
+        variant="primary"
+        isDisabled={busy || disabled}
+        onPress={async () => {
+          setBusy(true);
+          setError(null);
+          try {
+            const cookie = await invoke<string>("open_login", { serviceName: service });
+            onDone(cookie);
+          } catch (problem) {
+            setError(typeof problem === "string" ? problem : "登录没有完成");
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        {busy ? "登录中…" : "Log in"}
+      </Button>
+      {error && <span className="account__error">{error}</span>}
+    </>
+  );
+}
+
 function AccountRow({
   name,
   hint,
   where,
   value,
   onSave,
+  service,
 }: {
   name: string;
   hint: string;
   where: string;
   value: string;
   onSave: (value: string) => void;
+  service: string;
 }) {
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
@@ -469,7 +510,8 @@ function AccountRow({
         />
       </TextField>
       <div className="account__actions">
-        <Button size="sm" variant="secondary" onPress={() => onSave(draft)} isDisabled={draft === value}>
+        <LoginButton service={service} onDone={onSave} disabled={!inTauri()} />
+        <Button size="sm" variant="ghost" onPress={() => onSave(draft)} isDisabled={draft === value}>
           Save
         </Button>
         <Button

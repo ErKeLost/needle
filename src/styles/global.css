@@ -1655,3 +1655,8 @@ kbd {
 .palette__bar .input::placeholder {
   color: var(--paper-30);
 }
+
+.account__error {
+  font-size: 11px;
+  color: #ff9a80;
+}
