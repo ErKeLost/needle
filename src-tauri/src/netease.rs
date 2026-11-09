@@ -419,6 +419,20 @@ fn cache_directory(app: &AppHandle) -> Result<PathBuf, String> {
 /// One `eapi` call: the path and the JSON body are joined with a fixed
 /// separator, hashed, AES-ECB encrypted and posted as `params`.
 async fn eapi(path: &str, params: Value, cookie_in: Option<&str>) -> Result<Value, String> {
+    eapi_with(path, params, cookie_in, &[200]).await
+}
+
+/// Login answers 800/801/802/803 as ordinary states, not failures.
+pub(crate) async fn eapi_login_poll(path: &str, params: Value) -> Result<Value, String> {
+    eapi_with(path, params, None, &[800, 801, 802, 803]).await
+}
+
+async fn eapi_with(
+    path: &str,
+    params: Value,
+    cookie_in: Option<&str>,
+    allowed: &[i64],
+) -> Result<Value, String> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|error| error.to_string())?
@@ -511,7 +525,7 @@ async fn eapi(path: &str, params: Value, cookie_in: Option<&str>) -> Result<Valu
             .get("code")
             .and_then(Value::as_i64)
             .unwrap_or(status.as_u16() as i64);
-        if code == 200 {
+        if allowed.contains(&code) {
             return Ok(answer);
         }
         if code == -460 && attempt < 2 {

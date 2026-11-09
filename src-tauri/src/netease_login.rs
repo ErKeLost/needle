@@ -35,7 +35,7 @@ pub async fn netease_qr_create() -> Result<Value, String> {
 /// 800 expired, 801 waiting, 802 scanned, 803 signed in.
 #[tauri::command]
 pub async fn netease_qr_poll(app: tauri::AppHandle, key: String) -> Result<Value, String> {
-    let body = crate::netease::eapi_login(
+    let body = crate::netease::eapi_login_poll(
         "/api/login/qrcode/client/login",
         json!({ "key": key, "type": 3 }),
     )
