@@ -2718,3 +2718,14 @@ kbd {
   left: 2.1vh;
   top: 2.4vh;
 }
+
+/* Let the cover actually show through, with just enough veil for the words. */
+.backdrop {
+  opacity: 0.95;
+  filter: blur(70px) saturate(1.55) brightness(0.95);
+}
+
+.player::after {
+  background:
+    radial-gradient(80% 70% at 58% 44%, rgba(8, 7, 10, 0.32) 0%, rgba(8, 7, 10, 0.72) 62%, rgba(8, 7, 10, 0.94) 100%);
+}
