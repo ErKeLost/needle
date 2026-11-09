@@ -1984,3 +1984,38 @@ kbd {
   top: 22px;
   right: 24px;
 }
+
+/* The seek row is the width of the stage, not of its contents. */
+.bar {
+  grid-template-columns: minmax(200px, 1fr) minmax(420px, 46%) minmax(200px, 1fr);
+}
+
+.bar__center {
+  width: 100%;
+  gap: 6px;
+}
+
+.bar__seek {
+  gap: 10px;
+}
+
+.bar .slider {
+  width: 100%;
+  max-width: none;
+}
+
+.bar__seek .slider {
+  min-width: 0;
+}
+
+.bar__time {
+  min-width: 34px;
+}
+
+.bar__right {
+  gap: 10px;
+}
+
+.bar__right .slider {
+  width: 88px;
+}

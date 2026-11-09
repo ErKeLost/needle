@@ -103,14 +103,13 @@ export function TransportBar({
       </div>
 
       <div className="bar__right">
-        <Tooltip delay={500}>
-          <Button
-            isIconOnly
-            variant="ghost"
-            aria-label="Mute"
-            onPress={() => onVolume(volume > 0 ? 0 : 0.8)}
-            className="size-8 min-w-8 text-[var(--paper-46)] data-[hovered=true]:text-[var(--paper-72)]"
-          >
+        <Button
+          isIconOnly
+          variant="ghost"
+          aria-label={volume > 0 ? "Mute" : "Unmute"}
+          onPress={() => onVolume(volume > 0 ? 0 : 0.8)}
+          className="size-8 min-w-8 text-[var(--paper-46)] data-[hovered=true]:text-[var(--paper-72)]"
+        >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
               {volume > 0 ? (
                 <>
@@ -124,9 +123,7 @@ export function TransportBar({
                 </>
               )}
             </svg>
-          </Button>
-          <Tooltip.Content>{volume > 0 ? "Mute" : "Unmute"}</Tooltip.Content>
-        </Tooltip>
+        </Button>
         <Slider
           aria-label="Volume"
           className="w-24"
