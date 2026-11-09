@@ -7,6 +7,7 @@ use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
+use tauri::Manager;
 
 const API: &str = "https://api.qishui.com";
 const UA: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36";
@@ -223,7 +224,7 @@ pub async fn qishui_qr_create() -> Result<Value, String> {
 
 /// status: new / scanned / confirmed (or the numeric 1 / 2 / 3).
 #[tauri::command]
-pub async fn qishui_qr_poll() -> Result<Value, String> {
+pub async fn qishui_qr_poll(app: tauri::AppHandle) -> Result<Value, String> {
     let token = TOKEN.lock().unwrap().clone().ok_or_else(|| "先取二维码".to_string())?;
     let id = current_identity();
     let query = passport_query(
@@ -251,14 +252,21 @@ pub async fn qishui_qr_poll() -> Result<Value, String> {
         .collect::<Vec<_>>()
         .join("&");
 
-    let response = client()?
+    let mut request = client()?
         .post(format!("{API}/passport/web/check_qrconnect/?{query}"))
         .header("Accept", "application/json, text/javascript")
         .header("x-tt-passport-verify-portrait", &id.portrait)
         .header("x-tt-passport-trace-id", format!("{:x}", seed()))
         .header("Content-Type", "application/x-www-form-urlencoded")
         .header("x-ss-stub", md5_hex(&body).to_uppercase())
-        .body(body)
+        .body(body);
+    // The cookies set by get_qrcode are part of the session being polled; a
+    // cookie-less check looks like a different client and gets throttled.
+    let cookies = cookie_header();
+    if !cookies.is_empty() {
+        request = request.header("Cookie", cookies);
+    }
+    let response = request
         .send()
         .await
         .map_err(|error| format!("汽水轮询失败：{error}"))?;
@@ -268,12 +276,27 @@ pub async fn qishui_qr_poll() -> Result<Value, String> {
         .await
         .map_err(|error| format!("汽水返回了无效数据：{error}"))?;
     let data = answer.get("data").cloned().unwrap_or(Value::Null);
+    if let Ok(dir) = app.path().app_config_dir() {
+        use tauri::Manager;
+        let _ = std::fs::create_dir_all(&dir);
+        let line = format!("{}\n", answer.to_string().replace('\n', " "));
+        use std::io::Write;
+        if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(dir.join("qishui-login.log")) {
+            let _ = file.write_all(line.as_bytes());
+        }
+    }
     let status = data
         .get("status")
         .map(|value| value.to_string().trim_matches('"').to_lowercase())
         .unwrap_or_default();
 
-    if ["confirmed", "success", "3"].contains(&status.as_str()) {
+    let redirect = data
+        .get("redirect_url")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+    let signed = ["confirmed", "success", "3"].contains(&status.as_str()) || !redirect.is_empty();
+    if signed {
         // The confirmation sometimes only hands out the session after the
         // redirect it returns; follow it once before reading the jar.
         if let Some(target) = data.get("redirect_url").and_then(Value::as_str) {
@@ -289,7 +312,12 @@ pub async fn qishui_qr_poll() -> Result<Value, String> {
         }
         return Ok(json!({ "status": "confirmed", "cookie": cookie }));
     }
-    Ok(json!({ "status": status }))
+    Ok(json!({
+        "status": status,
+        "redirect": redirect,
+        "error": data.get("description").and_then(Value::as_str).unwrap_or(""),
+        "errorCode": data.get("error_code").and_then(Value::as_i64).unwrap_or(0),
+    }))
 }
 
 fn md5_hex(text: &str) -> String {

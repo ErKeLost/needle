@@ -20,6 +20,7 @@ export function LoginPanel({ service, onClose, onDone }: Props) {
   useEffect(() => {
     let alive = true;
     let timer = 0;
+    let gap = service === "qishui" ? 4500 : 1500;
     let key = "";
 
     const poll = async () => {
@@ -40,16 +41,32 @@ export function LoginPanel({ service, onClose, onDone }: Props) {
           if (answer.code === 800) setStatus("二维码过期，重新打开一次");
           if (answer.code === 801) setStatus("等待扫码…");
         } else if (service === "qishui") {
-          const answer = await invoke<{ status: string; cookie?: string }>("qishui_qr_poll");
+          const answer = await invoke<{
+            status: string;
+            cookie?: string;
+            redirect?: string;
+            error?: string;
+            errorCode?: number;
+          }>("qishui_qr_poll");
+          if (answer.errorCode === 7) {
+            setStatus("登录服务限流，放慢轮询…");
+            gap = Math.min(gap * 2, 30000);
+            timer = window.setTimeout(poll, gap);
+            return;
+          }
           if (answer.status === "confirmed" && answer.cookie) {
             finished.current = true;
             setStatus("登录成功");
             onDone(answer.cookie);
             return;
           }
-          if (answer.status === "scanned") setStatus("已扫码，请在手机上确认");
+          if (answer.status === "scanned" || answer.status === "2")
+            setStatus("已扫码，请在手机上确认");
           if (answer.status === "expired") setStatus("二维码过期，重新打开一次");
-          if (answer.status === "new") setStatus("等待扫码…");
+          if (answer.status === "new" || answer.status === "1") setStatus("等待扫码…");
+          if (answer.status && !["1", "2", "new", "scanned"].includes(answer.status)) {
+            setStatus(`等待确认（${answer.status}）`);
+          }
         } else {
           const answer = await invoke<{ code: string; url: string }>("qq_qr_poll");
           if (answer.code === "0" && answer.url) {
@@ -68,7 +85,9 @@ export function LoginPanel({ service, onClose, onDone }: Props) {
       } catch (problem) {
         if (alive) setError(typeof problem === "string" ? problem : "登录失败");
       }
-      timer = window.setTimeout(poll, 1500);
+      // The passport allows only a couple of checks per window; the official
+      // client waits 3.5s and we start at 4.5s, growing on a refusal.
+      timer = window.setTimeout(poll, gap);
     };
 
     (async () => {
@@ -100,7 +119,7 @@ export function LoginPanel({ service, onClose, onDone }: Props) {
           if (alive) setImage(data);
         }
         if (alive) setStatus("等待扫码…");
-        timer = window.setTimeout(poll, 1200);
+        timer = window.setTimeout(poll, gap);
       } catch (problem) {
         if (alive) setError(typeof problem === "string" ? problem : "取二维码失败");
       }

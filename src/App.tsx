@@ -422,6 +422,14 @@ export default function App() {
       >
         <div className="titlebar" data-tauri-drag-region />
 
+        {track.artwork && (
+          <div
+            className="backdrop"
+            aria-hidden
+            style={{ backgroundImage: `url("${track.artwork}")` }}
+          />
+        )}
+
         <RecordDeck
           playing={playing}
           progress={progress}
