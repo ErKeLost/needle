@@ -31,10 +31,18 @@ export function LoginPanel({ service, onClose, onDone }: Props) {
             "netease_qr_poll",
             { key },
           );
-          if (answer.code === 803 && answer.cookie) {
+          if (answer.code === 803) {
+            if (!answer.cookie) {
+              setError("登录成功但没拿到 MUSIC_U，看看日志");
+              return;
+            }
             finished.current = true;
             setStatus("登录成功");
             onDone(answer.cookie);
+            return;
+          }
+          if (answer.code === 8821) {
+            setError("网易云判定当前网络环境有风险，改用网页登录");
             return;
           }
           if (answer.code === 802) setStatus("已扫码，请在手机上确认");
@@ -150,6 +158,23 @@ export function LoginPanel({ service, onClose, onDone }: Props) {
         <p className="login__hint">
           打开手机{NAME[service]} App，扫上面的码
         </p>
+
+        <button
+          type="button"
+          className="login__fallback"
+          onClick={async () => {
+            setError(null);
+            setStatus("请在打开的窗口里完成登录…");
+            try {
+              const cookie = await invoke<string>("open_login", { serviceName: service });
+              if (cookie) onDone(cookie);
+            } catch (problem) {
+              setError(typeof problem === "string" ? problem : "网页登录没有完成");
+            }
+          }}
+        >
+          改用网页登录
+        </button>
       </div>
     </div>
   );

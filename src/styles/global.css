@@ -2788,3 +2788,18 @@ kbd {
   border-radius: 50%;
   object-fit: cover;
 }
+
+.login__fallback {
+  margin-top: 12px;
+  border: 0;
+  background: none;
+  color: var(--paper-30);
+  font-size: 11px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.login__fallback:hover {
+  color: var(--paper-72);
+}
