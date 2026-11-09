@@ -8,18 +8,29 @@ use std::time::Duration;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 /// What each service needs before we consider the listener signed in.
-fn service(name: &str) -> Option<(&'static str, &'static [&'static str], &'static str)> {
+fn service(name: &str) -> Option<(&'static str, &'static str)> {
     match name {
-        "netease" => Some(("https://music.163.com/", &["MUSIC_U"], "登录网易云音乐")),
-        "qq" => Some(("https://y.qq.com/", &["qm_keystones"], "登录 QQ 音乐")),
+        "netease" => Some(("https://music.163.com/", "登录网易云音乐")),
+        "qq" => Some(("https://y.qq.com/", "登录 QQ 音乐")),
         _ => None,
+    }
+}
+
+/// What "signed in" means for each service. QQ writes its music key under
+/// different names depending on where the login came from, so any of them
+/// counts once `uin` is there.
+fn signed_in(service_name: &str, cookies: &[String]) -> bool {
+    let has = |name: &str| cookies.iter().any(|cookie| cookie.split('=').next() == Some(name));
+    match service_name {
+        "netease" => has("MUSIC_U"),
+        "qq" => has("uin") && (has("qm_keystones") || has("qqmusic_key") || has("psrf_qqunionid")),
+        _ => false,
     }
 }
 
 #[tauri::command]
 pub async fn open_login(app: AppHandle, service_name: String) -> Result<String, String> {
-    let (address, wanted, title) =
-        service(&service_name).ok_or_else(|| "未知音源".to_string())?;
+    let (address, title) = service(&service_name).ok_or_else(|| "未知音源".to_string())?;
     let url = tauri::Url::parse(address).map_err(|error| format!("地址无效：{error}"))?;
 
     if let Some(existing) = app.get_webview_window("login") {
@@ -43,17 +54,13 @@ pub async fn open_login(app: AppHandle, service_name: String) -> Result<String, 
         }
 
         if let Ok(cookies) = window.cookies_for_url(url.clone()) {
-            let signed = wanted
+            let all: Vec<String> = cookies
                 .iter()
-                .all(|name| cookies.iter().any(|cookie| cookie.name() == *name));
-            if signed {
-                let all = cookies
-                    .iter()
-                    .map(|cookie| format!("{}={}", cookie.name(), cookie.value()))
-                    .collect::<Vec<_>>()
-                    .join("; ");
+                .map(|cookie| format!("{}={}", cookie.name(), cookie.value()))
+                .collect();
+            if signed_in(&service_name, &all) {
                 let _ = window.close();
-                return Ok(all);
+                return Ok(all.join("; "));
             }
         }
 

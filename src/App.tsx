@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import type { CSSProperties } from "react";
 import { ChordLane } from "./components/ChordLane";
 import { RecordDeck } from "./components/RecordDeck";
@@ -244,6 +245,20 @@ export default function App() {
   const pickSource = useCallback(
     async (next: MusicSource) => {
       if (next.can("search")) {
+        // A source that only plays for a signed-in listener asks first.
+        if (next.id === "qq" && !accountsRef.current.qq && inTauri()) {
+          try {
+            const cookie = await invoke<string>("open_login", { serviceName: "qq" });
+            if (!cookie) return;
+            setAccount("qq", cookie);
+            accountsRef.current = { ...accountsRef.current, qq: cookie };
+          } catch (error) {
+            setProblem(
+              typeof error === "string" ? error : "QQ 音乐登录没有完成，先在设置 → 账号里登录",
+            );
+            return;
+          }
+        }
         setSearchSource(next);
         return;
       }
