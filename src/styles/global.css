@@ -2566,3 +2566,94 @@ kbd {
   color: #ffb39d;
   border-color: rgba(255, 141, 111, 0.28);
 }
+
+/* ------------------------------------------------------------- signing in */
+
+.login {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+}
+
+.login__scrim {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: rgba(4, 3, 5, 0.72);
+  cursor: default;
+}
+
+.login__panel {
+  position: relative;
+  width: 344px;
+  padding: 20px 22px 22px;
+  border: 1px solid rgba(243, 236, 227, 0.12);
+  border-radius: 16px;
+  background: var(--ink-menu);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+  text-align: center;
+  animation: palette-in 180ms var(--ease);
+}
+
+.login__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.login__title {
+  font-size: 13px;
+  color: var(--paper-72);
+}
+
+.login__close {
+  border: 0;
+  background: none;
+  color: var(--paper-30);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.login__code {
+  display: grid;
+  place-items: center;
+  width: 232px;
+  height: 232px;
+  margin: 0 auto;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #f3ece3;
+}
+
+.login__code img {
+  width: 232px;
+  height: 232px;
+  display: block;
+}
+
+.login__placeholder {
+  width: 200px;
+  height: 200px;
+  border-radius: 8px;
+  background: repeating-linear-gradient(45deg, #e7ded1 0 8px, #efe8dc 8px 16px);
+}
+
+.login__status {
+  margin: 16px 0 0;
+  font-size: 12.5px;
+  color: var(--paper-72);
+}
+
+.login__status.is-error {
+  color: #ffb39d;
+}
+
+.login__hint {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--paper-30);
+}

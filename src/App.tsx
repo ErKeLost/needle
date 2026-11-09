@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import type { CSSProperties } from "react";
 import { ChordLane } from "./components/ChordLane";
 import { RecordDeck } from "./components/RecordDeck";
+import { LoginPanel } from "./components/LoginPanel";
 import { SearchPanel } from "./components/SearchPanel";
 import { SettingsView } from "./components/SettingsView";
 import { SourceMenu } from "./components/SourceMenu";
@@ -70,6 +70,7 @@ export default function App() {
   const [duration, setDuration] = useState(0);
   const [dropping, setDropping] = useState(false);
   const [searchSource, setSearchSource] = useState<MusicSource | null>(null);
+  const [loginSource, setLoginSource] = useState<MusicSource | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const openToken = useRef(0);
 
@@ -253,19 +254,11 @@ export default function App() {
   const pickSource = useCallback(
     async (next: MusicSource) => {
       if (next.can("search")) {
-        // A source that only plays for a signed-in listener asks first.
-        if (next.id === "qq" && !accountsRef.current.qq && inTauri()) {
-          try {
-            const cookie = await invoke<string>("open_login", { serviceName: "qq" });
-            if (!cookie) return;
-            setAccount("qq", cookie);
-            accountsRef.current = { ...accountsRef.current, qq: cookie };
-          } catch (error) {
-            setProblem(
-              typeof error === "string" ? error : "QQ 音乐登录没有完成，先在设置 → 账号里登录",
-            );
-            return;
-          }
+        // Both of these only hand out audio to a signed-in listener; the QR
+        // panel runs the same protocol the official apps do.
+        if ((next.id === "netease" || next.id === "qq") && !accountsRef.current[next.id] && inTauri()) {
+          setLoginSource(next);
+          return;
         }
         setSearchSource(next);
         return;
@@ -360,6 +353,19 @@ export default function App() {
     />
   ) : null;
 
+  const login = loginSource ? (
+    <LoginPanel
+      service={loginSource.id as "netease" | "qq"}
+      onClose={() => setLoginSource(null)}
+      onDone={(cookie) => {
+        setAccount(loginSource.id, cookie);
+        accountsRef.current = { ...accountsRef.current, [loginSource.id]: cookie };
+        setSearchSource(loginSource);
+        setLoginSource(null);
+      }}
+    />
+  ) : null;
+
   if (view === "settings") {
     return (
       <>
@@ -380,6 +386,7 @@ export default function App() {
           onToggle={toggle}
         />
         {palette}
+        {login}
       </>
     );
   }
@@ -462,6 +469,7 @@ export default function App() {
         {dropping && <div className="dropzone" aria-hidden />}
       </main>
       {palette}
+      {login}
     </>
   );
 }

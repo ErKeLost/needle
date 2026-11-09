@@ -2,6 +2,8 @@ mod auth;
 mod cache;
 mod netease;
 mod qishui;
+mod netease_login;
+mod qq_login;
 mod qq;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -23,6 +25,11 @@ pub fn run() {
             qishui::qishui_search,
             qishui::qishui_track,
             qishui::qishui_stream,
+            qq_login::qq_qr_create,
+            qq_login::qq_qr_poll,
+            qq_login::qq_qr_exchange,
+            netease_login::netease_qr_create,
+            netease_login::netease_qr_poll,
             cache::cache_usage,
             cache::cache_clear,
             auth::open_login
