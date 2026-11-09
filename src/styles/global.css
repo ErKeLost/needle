@@ -2754,3 +2754,8 @@ kbd {
   transform-origin: center;
   opacity: 0.95;
 }
+
+.bar__cover {
+  box-shadow: none;
+  background: transparent;
+}
