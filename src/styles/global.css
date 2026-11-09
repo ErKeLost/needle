@@ -2729,3 +2729,28 @@ kbd {
   background:
     radial-gradient(80% 70% at 58% 44%, rgba(8, 7, 10, 0.32) 0%, rgba(8, 7, 10, 0.72) 62%, rgba(8, 7, 10, 0.94) 100%);
 }
+
+/* Blur is a static property per depth, not something animated every frame:
+   animating filter on six rows at once is what made the stage stutter. */
+.lane__row {
+  filter: blur(3.4px);
+  will-change: transform, opacity;
+}
+
+.lane__row[data-distance="1"] {
+  filter: blur(1.3px);
+}
+
+.lane__row[data-distance="0"] {
+  filter: none;
+}
+
+/* The cover is blurred while small, then scaled up: a full-screen 90px blur
+   repaints the whole window on this WebView. */
+.backdrop {
+  inset: 32%;
+  filter: blur(22px) saturate(1.6) brightness(0.98);
+  transform: scale(3.4);
+  transform-origin: center;
+  opacity: 0.95;
+}

@@ -107,17 +107,10 @@ function LaneRow({
       className={`lane__row${isCurrent ? " is-current" : ""}`}
       data-distance={depth}
       style={{ "--d": distance } as CSSProperties}
-      initial={calm ? false : { opacity: 0, y: distance * 94 + 24, filter: "blur(12px)" }}
+      initial={calm ? false : { opacity: 0, y: distance * 94 + 24 }}
       animate={{
         opacity: depth === 0 ? 1 : depth === 1 ? 0.5 : 0.28,
         y: distance * 94,
-        filter: calm
-          ? "blur(0px)"
-          : depth === 0
-            ? "blur(0px)"
-            : depth === 1
-              ? "blur(1.2px)"
-              : "blur(3.5px)",
       }}
       transition={calm ? { duration: 0 } : rowMotion}
       aria-hidden={!isCurrent}
