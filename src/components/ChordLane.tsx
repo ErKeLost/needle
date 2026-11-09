@@ -53,7 +53,7 @@ export function ChordLane({ track, time }: Props) {
   return (
     <div className={`lane lane--${track.kind}`}>
       {rows.map(({ distance, line }) => (
-        <LaneRow key={line.at} line={line} distance={distance} time={time} kind={track.kind} />
+        <LaneRow key={line.at} line={line} distance={distance} time={time} />
       ))}
     </div>
   );
@@ -63,12 +63,10 @@ function LaneRow({
   line,
   distance,
   time,
-  kind,
 }: {
   line: StageLine;
   distance: number;
   time: number;
-  kind: Track["kind"];
 }) {
   const tokens = useRef<HTMLDivElement>(null);
   const calm = useReducedMotion();
