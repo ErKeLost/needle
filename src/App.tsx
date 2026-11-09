@@ -159,6 +159,13 @@ export default function App() {
     transport.setVolume(settings.volume);
   }, [settings.volume, transport]);
 
+  // A transient failure is a toast, not a permanent line over the words.
+  useEffect(() => {
+    if (!problem) return;
+    const timer = window.setTimeout(() => setProblem(null), 8000);
+    return () => window.clearTimeout(timer);
+  }, [problem]);
+
   // A click while the side is still being fetched leaves the needle down.
   const wantsPlay = useRef(false);
 
@@ -289,6 +296,11 @@ export default function App() {
       if ((event.metaKey || event.ctrlKey) && event.key === ",") {
         event.preventDefault();
         setView((current) => (current === "settings" ? "playing" : "settings"));
+        return;
+      }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "r") {
+        event.preventDefault();
+        window.location.reload();
         return;
       }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {

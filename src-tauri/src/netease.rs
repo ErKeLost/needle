@@ -402,7 +402,7 @@ async fn eapi(path: &str, params: Value, cookie_in: Option<&str>) -> Result<Valu
             continue;
         }
         return Err(match code {
-            -460 => "网易云暂时风控了这台机器的请求（-460），过一会儿再试".to_string(),
+            -460 => "网易云暂时限制了请求，过一会儿再试".to_string(),
             301 | 302 | 401 => "网易云登录已失效，设置 → 账号里更新 Cookie".to_string(),
             _ => format!("网易云拒绝了播放请求（{code}）"),
         });

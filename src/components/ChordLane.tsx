@@ -124,6 +124,23 @@ function LaneRow({
     >
       <span className="lane__section">{line.section ?? ""}</span>
       <div className="lane__tokens" ref={tokens}>
+        {isCurrent && (
+          <span className="line-shine" aria-hidden>
+            {line.tokens.map((token, i) =>
+              token.rest ? (
+                <span className="token token--rest" key={i}>–</span>
+              ) : token.word ? (
+                <span className="token token--word" key={i}>{token.word}</span>
+              ) : (
+                <span className="token" key={i}>
+                  {token.notes.length > 1 && <span className="bracket">[</span>}
+                  {token.notes.join(" ")}
+                  {token.notes.length > 1 && <span className="bracket">]</span>}
+                </span>
+              ),
+            )}
+          </span>
+        )}
         {line.tokens.map((token, i) => (
           <TokenView
             key={`${line.at}-${i}`}
@@ -167,11 +184,6 @@ const TokenView = memo(function TokenView({
         transition={{ type: "spring", stiffness: 320, damping: 24 }}
       >
         {token.word}
-        {state === "on" && (
-          <span className="shimmer" aria-hidden>
-            {token.word}
-          </span>
-        )}
       </motion.span>
     );
   }
