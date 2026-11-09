@@ -2803,3 +2803,12 @@ kbd {
 .login__fallback:hover {
   color: var(--paper-72);
 }
+
+/* A little more presence for the source mark. */
+.source__brand {
+  flex: none;
+}
+
+.meta .button {
+  min-height: 38px;
+}
