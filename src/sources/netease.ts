@@ -53,6 +53,21 @@ async function devSearch(query: string): Promise<Hit[]> {
   }));
 }
 
+async function devChart(): Promise<Hit[]> {
+  const response = await fetch("/ne/api/playlist/detail?id=3778678");
+  if (!response.ok) throw new Error(`网易云没有回应（${response.status}）`);
+  const body = await readJson(response, "网易云");
+  const songs: any[] = body?.result?.tracks ?? [];
+  return songs.map((song) => ({
+    id: song.id,
+    name: song.name ?? "",
+    artist: (song.artists ?? []).map((artist: { name: string }) => artist.name).join(" / "),
+    album: song.album?.name ?? "",
+    cover: song.album?.picUrl ?? "",
+    duration: song.duration ?? 0,
+  }));
+}
+
 async function devLyric(id: string): Promise<LyricAnswer> {
   const response = await fetch(`/ne/api/song/lyric?id=${id}&lv=1&kv=1&tv=-1`);
   if (!response.ok) throw new Error(`网易云没有回应（${response.status}）`);
@@ -79,6 +94,13 @@ export const neteaseSource: MusicSource = {
     return [];
   },
 
+  async chart(limit = 30) {
+    const hits = inTauri()
+      ? (await invoke<{ tracks: Hit[] }>("netease_chart", { limit })).tracks
+      : await devChart();
+    return hits.map(neteaseTrack);
+  },
+
   async search(query) {
     const hits = inTauri()
       ? (await invoke<{ tracks: Hit[] }>("netease_search", { query, limit: 24 })).tracks
@@ -86,10 +108,11 @@ export const neteaseSource: MusicSource = {
     return hits.map(neteaseTrack);
   },
 
-  async stream(track) {
+  async stream(track, options) {
     if (!inTauri()) throw new Error("网易云播放需要桌面版");
     const answer = await invoke<{ path: string; kind: string }>("netease_stream", {
       id: track.id.replace(/^ne-/, ""),
+      cookie: options?.cookie ?? null,
     });
     return {
       audio: { kind: "url", url: convertFileSrc(answer.path) },
@@ -101,6 +124,6 @@ export const neteaseSource: MusicSource = {
     const answer = inTauri()
       ? await invoke<LyricAnswer>("netease_lyric", { id: track.id.replace(/^ne-/, "") })
       : await devLyric(track.id.replace(/^ne-/, ""));
-    return toStage(parseLrc(answer.lrc), track.duration);
+    return toStage(parseLrc(answer.lrc), track.duration, track);
   },
 };

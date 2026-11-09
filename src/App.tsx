@@ -10,19 +10,48 @@ import { SparkMark } from "./components/icons";
 import { Transport } from "./audio/transport";
 import { buildSession } from "./music/session";
 import type { MusicSource, Track } from "./music/types";
+import { useAccounts } from "./accounts";
 import { useSettings } from "./settings";
-import { adoptBrowserFiles, localSource, pickFiles } from "./sources/local";
+import { adoptBrowserFiles, inTauri, localSource, pickFiles } from "./sources/local";
 import { neteaseSource } from "./sources/netease";
 import { sessionSource } from "./sources/session";
 import { musicSources } from "./sources";
 
 const SESSION = buildSession();
+const LAST_KEY = "needle.last.v2";
+
+type LastPlayed = { sourceId: string; track: Track };
+
+/** The side that was on the platter when the window last closed. */
+function readLast(): LastPlayed | null {
+  try {
+    const raw = localStorage.getItem(LAST_KEY);
+    if (!raw) return null;
+    const saved = JSON.parse(raw) as LastPlayed;
+    if (!saved?.track?.id || !saved.sourceId) return null;
+    return saved;
+  } catch {
+    return null;
+  }
+}
+
+function writeLast(sourceId: string, track: Track) {
+  if (sourceId === "session" || sourceId === "local") return;
+  try {
+    localStorage.setItem(LAST_KEY, JSON.stringify({ sourceId, track }));
+  } catch {
+    // the cache is not important enough to break a track over
+  }
+}
 
 export default function App() {
   const transport = useMemo(() => new Transport(), []);
   const session = useMemo(() => sessionSource(SESSION), []);
   const allSources = useMemo(() => musicSources(session), [session]);
   const { settings, update } = useSettings();
+  const { accounts, setAccount } = useAccounts();
+  const accountsRef = useRef(accounts);
+  accountsRef.current = accounts;
 
   const [view, setView] = useState<"playing" | "settings">("playing");
   const [source, setSource] = useState<MusicSource>(session);
@@ -44,7 +73,7 @@ export default function App() {
   }, [allSources, settings.enabled]);
 
   const load = useCallback(
-    async (next: Track, from: MusicSource) => {
+    async (next: Track, from: MusicSource, remember = true): Promise<boolean> => {
       const token = ++openToken.current;
       transport.pause();
       setPlaying(false);
@@ -59,20 +88,25 @@ export default function App() {
         // audio is still being fetched.
         if (from.lyrics && !next.lines.length) {
           const lines = await from.lyrics(next).catch(() => next.lines);
-          if (token !== openToken.current) return;
+          if (token !== openToken.current) return false;
           if (lines.length) setTrack({ ...next, lines });
         }
-        const stream = await from.stream(next);
-        if (token !== openToken.current) return;
+        const stream = await from.stream(next, { cookie: accountsRef.current[from.id] });
+        if (token !== openToken.current) return false;
         await transport.load(stream.audio, next.duration);
-        if (token !== openToken.current) return;
+        if (token !== openToken.current) return false;
         setDuration(transport.duration || next.duration);
         setReady(true);
+        if (remember) writeLast(from.id, next);
+        return true;
       } catch (error) {
-        if (token !== openToken.current) return;
+        if (token !== openToken.current) return false;
         console.error("could not open the track", error);
-        setProblem(error instanceof Error ? error.message : "打不开这首歌");
+        setProblem(
+          typeof error === "string" ? error : error instanceof Error ? error.message : "打不开这首歌",
+        );
         setReady(false);
+        return false;
       }
     },
     [transport],
@@ -83,9 +117,38 @@ export default function App() {
       setPlaying(false);
       setTime(transport.duration);
     };
-    void load(SESSION, session);
-    return () => transport.dispose();
-  }, [load, session, transport]);
+    transport.onError = (message) => setProblem(message);
+
+    // Open on the last side, then on a real song, and only fall back to the
+    // built-in session when neither is reachable.
+    let alive = true;
+    const boot = async () => {
+      const last = readLast();
+      const from = last && allSources.find((item) => item.id === last.sourceId && item.id !== "local");
+      if (last && from && (await load(last.track, from, false))) return;
+      // In a browser there is no signed request and no cached audio, so the
+      // page opens on the built-in side instead of an error.
+      if (inTauri()) {
+        try {
+          // The hot chart: real songs, covers and lyrics, and more than one
+          // candidate so a member-only track does not leave the platter empty.
+          const chart = (await neteaseSource.chart?.(6)) ?? [];
+          for (const candidate of chart.slice(0, 3)) {
+            if (!alive) return;
+            if (await load(candidate, neteaseSource, false)) return;
+          }
+        } catch {
+          // no network, or NetEase is holding us off; the session still plays
+        }
+      }
+      if (alive) await load(SESSION, session, false);
+    };
+    void boot();
+    return () => {
+      alive = false;
+      transport.dispose();
+    };
+  }, [allSources, load, session, transport]);
 
   useEffect(() => {
     transport.setVolume(settings.volume);
@@ -276,6 +339,8 @@ export default function App() {
           current={track}
           playing={playing}
           onChange={update}
+          accounts={accounts}
+          onAccount={setAccount}
           onClose={() => setView("playing")}
           onSearch={(next) => setSearchSource(next)}
           onOpenFiles={openFiles}

@@ -8,6 +8,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             netease::netease_search,
+            netease::netease_chart,
             netease::netease_lyric,
             netease::netease_stream,
             qq::qq_search,

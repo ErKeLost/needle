@@ -91,10 +91,11 @@ export const qqSource: MusicSource = {
     return hits.map(qqTrack);
   },
 
-  async stream(track) {
+  async stream(track, options) {
     if (!inTauri()) throw new Error("QQ 音乐播放需要桌面版");
     const answer = await invoke<{ path: string; kind: string }>("qq_stream", {
       id: track.id,
+      cookie: options?.cookie ?? null,
     });
     return {
       audio: { kind: "url", url: convertFileSrc(answer.path) },
@@ -106,6 +107,6 @@ export const qqSource: MusicSource = {
     const answer = inTauri()
       ? await invoke<LyricAnswer>("qq_lyric", { id: track.id })
       : await devLyric(track.id);
-    return toStage(parseLrc(answer.lrc), track.duration);
+    return toStage(parseLrc(answer.lrc), track.duration, track);
   },
 };

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Button, Input, TextField } from "@heroui/react";
 import { clock } from "../music/notes";
 import type { MusicSource, Track } from "../music/types";
 
@@ -67,7 +68,8 @@ export function SearchPanel({ source, onClose, onPick }: Props) {
             <circle cx="11" cy="11" r="6.5" />
             <path d="M16 16l4.5 4.5" strokeLinecap="round" />
           </svg>
-          <input
+          <TextField className="flex-1" aria-label={`搜索${source.name}`}>
+          <Input
             ref={input}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -85,8 +87,9 @@ export function SearchPanel({ source, onClose, onPick }: Props) {
             }}
             placeholder="搜索歌曲、歌手或专辑"
             spellCheck={false}
-            aria-label={`搜索${source.name}`}
+            className="border-0 bg-transparent"
           />
+          </TextField>
           <span className="palette__source">{source.name}</span>
         </div>
 
@@ -100,13 +103,13 @@ export function SearchPanel({ source, onClose, onPick }: Props) {
             <p className="palette__hint">没有找到「{query.trim()}」</p>
           )}
           {results?.map((track, index) => (
-            <button
-              type="button"
+            <Button
               key={track.id}
-              className="hit"
+              variant="ghost"
+              className="hit h-auto w-full justify-start"
               data-active={index === cursor}
               onMouseEnter={() => setCursor(index)}
-              onClick={() => choose(index)}
+              onPress={() => choose(index)}
             >
               <span className="hit__cover">
                 {track.artwork ? <img src={track.artwork} alt="" loading="lazy" /> : null}
@@ -117,7 +120,7 @@ export function SearchPanel({ source, onClose, onPick }: Props) {
                 {track.album ? ` · ${track.album}` : ""}
               </span>
               <span className="hit__time">{clock(track.duration)}</span>
-            </button>
+            </Button>
           ))}
         </div>
 

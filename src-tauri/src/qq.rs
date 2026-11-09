@@ -117,9 +117,22 @@ pub async fn qq_lyric(id: String) -> Result<Value, String> {
 }
 
 #[tauri::command]
-pub async fn qq_stream(app: AppHandle, id: String) -> Result<Value, String> {
-    let (url, kind) = resolve_stream(&mid_of(&id)).await?;
-    let file = cache_file(&app, &mid_of(&id), &kind)?;
+pub async fn qq_stream(app: AppHandle, id: String, cookie: Option<String>) -> Result<Value, String> {
+    let mid = mid_of(&id);
+    let directory = cache_file(&app, &mid, "m4a")?
+        .parent()
+        .map(|path| path.to_path_buf())
+        .ok_or_else(|| "无法定位缓存目录".to_string())?;
+    for kind in ["m4a", "flac", "mp3"] {
+        let file = directory.join(format!("qq-{mid}.{kind}"));
+        if std::fs::metadata(&file).map(|meta| meta.len() > 16 * 1024).unwrap_or(false) {
+            return Ok(json!({ "path": file.to_string_lossy(), "kind": kind, "cached": true }));
+        }
+    }
+
+    let uin = uin_of(cookie.as_deref());
+    let (url, kind) = resolve_stream(&mid, &uin, cookie.as_deref()).await?;
+    let file = cache_file(&app, &mid, &kind)?;
 
     if !file.exists() {
         let bytes = client()?
@@ -149,7 +162,7 @@ pub async fn qq_stream(app: AppHandle, id: String) -> Result<Value, String> {
 }
 
 /// The playable address and container for a song mid.
-async fn resolve_stream(mid: &str) -> Result<(String, String), String> {
+async fn resolve_stream(mid: &str, uin: &str, cookie: Option<&str>) -> Result<(String, String), String> {
     let guid = format!(
         "{}",
         SystemTime::now()
@@ -165,17 +178,22 @@ async fn resolve_stream(mid: &str) -> Result<(String, String), String> {
                 "guid": guid,
                 "songmid": [mid],
                 "songtype": [0],
-                "uin": "0",
+                "uin": uin,
                 "loginflag": 1,
                 "platform": "20"
             }
-        }
+        },
+        "comm": { "uin": uin, "format": "json", "ct": 24, "cv": 0 }
     });
 
-    let response = client()?
+    let mut request = client()?
         .get(MUSICU)
         .query(&[("format", "json"), ("data", payload.to_string().as_str())])
-        .header("Referer", YQQ)
+        .header("Referer", YQQ);
+    if let Some(cookie) = cookie.filter(|value| !value.trim().is_empty()) {
+        request = request.header("Cookie", cookie.trim());
+    }
+    let response = request
         .send()
         .await
         .map_err(|error| format!("QQ 音乐连不上：{error}"))?;
@@ -191,7 +209,11 @@ async fn resolve_stream(mid: &str) -> Result<(String, String), String> {
         .unwrap_or(Value::Null);
     let purl = text(&info, "purl");
     if purl.is_empty() {
-        return Err("这首歌在 QQ 音乐需要会员，暂时放不了".into());
+        return Err(if uin == "0" || uin.is_empty() {
+            "QQ 音乐要登录才给音频：设置 → 账号，粘贴浏览器里 y.qq.com 的 Cookie".into()
+        } else {
+            "这首歌需要 QQ 音乐会员；当前 Cookie 没有播放权限".into()
+        });
     }
     let sip = body
         .pointer("/req_0/data/sip/0")
@@ -201,6 +223,19 @@ async fn resolve_stream(mid: &str) -> Result<(String, String), String> {
     let url = format!("{sip}{purl}");
     let kind = if purl.contains(".flac") { "flac" } else { "m4a" }.to_string();
     Ok((url, kind))
+}
+
+/// QQ stores the listener as `uin=o123456789`; the API takes it as it is.
+fn uin_of(cookie: Option<&str>) -> String {
+    cookie
+        .and_then(|value| {
+            value.split(';').find_map(|part| {
+                let (key, raw) = part.split_once('=')?;
+                (key.trim() == "uin").then(|| raw.trim().to_string())
+            })
+        })
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "0".into())
 }
 
 fn cache_file(app: &AppHandle, mid: &str, kind: &str) -> Result<std::path::PathBuf, String> {

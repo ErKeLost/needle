@@ -109,6 +109,63 @@ pub async fn netease_search(query: String, limit: Option<u32>) -> Result<Value, 
     Ok(json!({ "tracks": tracks }))
 }
 
+/// The hot chart, the way the app opens on something that is actually
+/// pressed and shipping this week.
+#[tauri::command]
+pub async fn netease_chart(limit: Option<u32>) -> Result<Value, String> {
+    let limit = limit.unwrap_or(30).clamp(1, 100) as usize;
+    let response = client()?
+        .get(format!("{SITE}/api/playlist/detail"))
+        .query(&[("id", "3778678")])
+        .header("Referer", referer())
+        .send()
+        .await
+        .map_err(|error| format!("网易云连不上：{error}"))?;
+
+    let body: Value = response
+        .json()
+        .await
+        .map_err(|error| format!("网易云返回了无效数据：{error}"))?;
+    if body.get("code").and_then(Value::as_i64) != Some(200) {
+        return Err("网易云没有给出排行榜".into());
+    }
+
+    let songs = body
+        .pointer("/result/tracks")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+
+    let tracks: Vec<Value> = songs
+        .iter()
+        .take(limit)
+        .filter_map(|song| {
+            let id = song.get("id")?.as_i64()?;
+            let artists = song
+                .get("artists")
+                .and_then(Value::as_array)
+                .map(|list| {
+                    list.iter()
+                        .filter_map(|artist| artist.get("name").and_then(Value::as_str))
+                        .collect::<Vec<_>>()
+                        .join(" / ")
+                })
+                .unwrap_or_default();
+            let album = song.get("album").cloned().unwrap_or(Value::Null);
+            Some(json!({
+                "id": id,
+                "name": text_of(song, "/name"),
+                "artist": artists,
+                "album": text_of(&album, "/name"),
+                "cover": text_of(&album, "/picUrl"),
+                "duration": song.get("duration").and_then(Value::as_i64).unwrap_or(0),
+            }))
+        })
+        .collect();
+
+    Ok(json!({ "tracks": tracks }))
+}
+
 /// The original lyric sheet and its translation, as timed LRC.
 #[tauri::command]
 pub async fn netease_lyric(id: String) -> Result<Value, String> {
@@ -134,39 +191,47 @@ pub async fn netease_lyric(id: String) -> Result<Value, String> {
 /// Asks the desktop endpoint for a playable URL and keeps one copy of the
 /// audio in the app cache, so seeking is a local file read.
 #[tauri::command]
-pub async fn netease_stream(app: AppHandle, id: String) -> Result<Value, String> {
-    let (url, kind) = resolve_stream(&id).await?;
-
+pub async fn netease_stream(app: AppHandle, id: String, cookie: Option<String>) -> Result<Value, String> {
     let directory = cache_directory(&app)?;
     tokio::fs::create_dir_all(&directory)
         .await
         .map_err(|error| format!("无法建立缓存目录：{error}"))?;
+
+    // A copy already on this machine plays without asking NetEase anything,
+    // which also carries the app through the minutes its risk control refuses.
+    if let Some((file, kind)) = cached(&directory, &id) {
+        return Ok(json!({
+            "path": file.to_string_lossy(),
+            "kind": kind,
+            "cached": true,
+        }));
+    }
+
+    let (url, kind) = resolve_stream(&id, cookie.as_deref()).await?;
     let file = directory.join(format!("{id}.{kind}"));
 
-    if !file.exists() {
-        let bytes = client()?
-            .get(&url)
-            .header("Referer", referer())
-            .send()
-            .await
-            .map_err(|error| format!("音频下载失败：{error}"))?
-            .error_for_status()
-            .map_err(|error| format!("音频下载失败：{error}"))?
-            .bytes()
-            .await
-            .map_err(|error| format!("音频读取失败：{error}"))?;
-        if bytes.len() < 32 * 1024 {
-            return Err("网易云只返回了空音频".into());
-        }
-        // Write beside the target first: a half download must not look cached.
-        let partial = file.with_extension(format!("{kind}.part"));
-        tokio::fs::write(&partial, &bytes)
-            .await
-            .map_err(|error| format!("无法写入缓存：{error}"))?;
-        tokio::fs::rename(&partial, &file)
-            .await
-            .map_err(|error| format!("无法完成缓存：{error}"))?;
+    let bytes = client()?
+        .get(&url)
+        .header("Referer", referer())
+        .send()
+        .await
+        .map_err(|error| format!("音频下载失败：{error}"))?
+        .error_for_status()
+        .map_err(|error| format!("音频下载失败：{error}"))?
+        .bytes()
+        .await
+        .map_err(|error| format!("音频读取失败：{error}"))?;
+    if bytes.len() < 32 * 1024 {
+        return Err("网易云只返回了空音频".into());
     }
+    // Write beside the target first: a half download must not look cached.
+    let partial = file.with_extension(format!("{kind}.part"));
+    tokio::fs::write(&partial, &bytes)
+        .await
+        .map_err(|error| format!("无法写入缓存：{error}"))?;
+    tokio::fs::rename(&partial, &file)
+        .await
+        .map_err(|error| format!("无法完成缓存：{error}"))?;
 
     Ok(json!({
         "path": file.to_string_lossy(),
@@ -175,44 +240,65 @@ pub async fn netease_stream(app: AppHandle, id: String) -> Result<Value, String>
     }))
 }
 
-/// The playable address and container for a song id.
-async fn resolve_stream(id: &str) -> Result<(String, String), String> {
-    let answer = eapi(
-        "/api/song/enhance/player/url/v1",
-        json!({
-            "ids": format!("[{id}]"),
-            "level": "exhigh",
-            "encodeType": "mp3",
-        }),
-    )
-    .await?;
-
-    let item = answer
-        .get("data")
-        .and_then(Value::as_array)
-        .and_then(|list| list.first())
-        .cloned()
-        .ok_or_else(|| "网易云没有给出这首歌的地址".to_string())?;
-
-    let url = item
-        .get("url")
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_string();
-    if url.is_empty() {
-        return Err("这首歌需要网易云会员，或在当前地区不可用".into());
+/// A complete cached file for a song id, whatever container it came in.
+fn cached(directory: &std::path::Path, id: &str) -> Option<(std::path::PathBuf, String)> {
+    for kind in ["mp3", "flac", "ogg"] {
+        let file = directory.join(format!("{id}.{kind}"));
+        if std::fs::metadata(&file).map(|meta| meta.len() > 32 * 1024).unwrap_or(false) {
+            return Some((file, kind.to_string()));
+        }
     }
-    if item.get("freeTrialInfo").map(Value::is_object).unwrap_or(false) {
-        return Err("这首歌只放得出一小段试听".into());
+    None
+}
+
+/// The playable address and container for a song id. NetEase hands out
+/// trial clips for some quality tiers and full files for others, and its risk
+/// control can refuse a single tier for a moment, so each is tried in turn.
+async fn resolve_stream(id: &str, cookie: Option<&str>) -> Result<(String, String), String> {
+    let mut last = "网易云没有给出这首歌的播放地址".to_string();
+
+    for level in ["exhigh", "higher", "standard"] {
+        let answer = match eapi(
+            "/api/song/enhance/player/url/v1",
+            json!({
+                "ids": format!("[{id}]"),
+                "level": level,
+                "encodeType": "mp3",
+            }),
+            cookie,
+        )
+        .await
+        {
+            Ok(answer) => answer,
+            Err(error) => {
+                last = error;
+                continue;
+            }
+        };
+
+        let item = answer
+            .get("data")
+            .and_then(Value::as_array)
+            .and_then(|list| list.first())
+            .cloned()
+            .unwrap_or(Value::Null);
+
+        let url = item.get("url").and_then(Value::as_str).unwrap_or_default();
+        let trial = item.get("freeTrialInfo").map(Value::is_object).unwrap_or(false);
+        if url.is_empty() || trial {
+            last = "这首歌在网易云需要会员，或当前地区不可用".into();
+            continue;
+        }
+
+        let kind = item
+            .get("type")
+            .and_then(Value::as_str)
+            .unwrap_or("mp3")
+            .to_lowercase();
+        return Ok((url.to_string(), kind));
     }
 
-    let kind = item
-        .get("type")
-        .and_then(Value::as_str)
-        .unwrap_or("mp3")
-        .to_lowercase();
-
-    Ok((url, kind))
+    Err(last)
 }
 
 fn cache_directory(app: &AppHandle) -> Result<PathBuf, String> {
@@ -225,21 +311,13 @@ fn cache_directory(app: &AppHandle) -> Result<PathBuf, String> {
 
 /// One `eapi` call: the path and the JSON body are joined with a fixed
 /// separator, hashed, AES-ECB encrypted and posted as `params`.
-async fn eapi(path: &str, params: Value) -> Result<Value, String> {
+async fn eapi(path: &str, params: Value, cookie_in: Option<&str>) -> Result<Value, String> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|error| error.to_string())?
         .as_millis();
 
-    let mut seed = now as u64;
-    let device: String = (0..52)
-        .map(|_| {
-            seed = seed
-                .wrapping_mul(6364136223846793005)
-                .wrapping_add(1442695040888963407);
-            format!("{:X}", (seed >> 33) & 0xF)
-        })
-        .collect();
+    let device = device_id();
 
     let header = json!({
         "osver": "Microsoft-Windows-10-Professional-build-19045-64bit",
@@ -271,7 +349,7 @@ async fn eapi(path: &str, params: Value) -> Result<Value, String> {
     let encrypted = cipher.encrypt_padded_vec_mut::<Pkcs7>(plain.as_bytes());
     let params = hex::encode_upper(encrypted);
 
-    let cookie = header
+    let mut cookie = header
         .as_object()
         .map(|fields| {
             fields
@@ -286,29 +364,50 @@ async fn eapi(path: &str, params: Value) -> Result<Value, String> {
                 .join("; ")
         })
         .unwrap_or_default();
+    if let Some(signed) = cookie_in.as_deref().filter(|value| !value.trim().is_empty()) {
+        cookie.push_str("; ");
+        cookie.push_str(signed.trim());
+    }
 
     let url = format!("{EAPI}{}", path.replacen("/api/", "/eapi/", 1));
-    let response = client()?
-        .post(url)
-        .header("User-Agent", EAPI_UA)
-        .header("Referer", referer())
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .header("Cookie", cookie)
-        .body(format!("params={params}"))
-        .send()
-        .await
-        .map_err(|error| format!("网易云连不上：{error}"))?;
+    // -460 is NetEase's risk control, usually brief. The plugin retries once
+    // with the same device and account, so we do too.
+    for attempt in 0..2 {
+        let response = client()?
+            .post(&url)
+            .header("User-Agent", EAPI_UA)
+            .header("Referer", referer())
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .header("Cookie", &cookie)
+            .body(format!("params={params}"))
+            .send()
+            .await
+            .map_err(|error| format!("网易云连不上：{error}"))?;
 
-    let status = response.status();
-    let answer: Value = response
-        .json()
-        .await
-        .map_err(|error| format!("网易云返回了无效数据（{status}）：{error}"))?;
-    if answer.get("code").and_then(Value::as_i64) != Some(200) {
-        let code = answer.get("code").and_then(Value::as_i64).unwrap_or(status.as_u16() as i64);
-        return Err(format!("网易云拒绝了播放请求（{code}）"));
+        let status = response.status();
+        let answer: Value = response
+            .json()
+            .await
+            .map_err(|error| format!("网易云返回了无效数据（{status}）：{error}"))?;
+
+        let code = answer
+            .get("code")
+            .and_then(Value::as_i64)
+            .unwrap_or(status.as_u16() as i64);
+        if code == 200 {
+            return Ok(answer);
+        }
+        if code == -460 && attempt == 0 {
+            tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+            continue;
+        }
+        return Err(match code {
+            -460 => "网易云暂时风控了这台机器的请求（-460），过一会儿再试".to_string(),
+            301 | 302 | 401 => "网易云登录已失效，设置 → 账号里更新 Cookie".to_string(),
+            _ => format!("网易云拒绝了播放请求（{code}）"),
+        });
     }
-    Ok(answer)
+    Err("网易云没有给出播放地址".into())
 }
 
 #[cfg(test)]
@@ -331,11 +430,26 @@ mod tests {
 
     #[tokio::test]
     #[ignore]
-    async fn resolves_a_playable_file() {
-        let (url, kind) = resolve_stream("2668397359").await.unwrap();
+    async fn resolves_and_downloads_a_playable_file() {
+        let (url, kind) = resolve_stream("2668397359", None).await.unwrap();
         assert!(url.starts_with("http"));
         assert!(kind == "mp3" || kind == "flac");
         let response = client().unwrap().get(&url).header("Referer", referer()).send().await.unwrap();
         assert!(response.status().is_success());
+        let bytes = response.bytes().await.unwrap();
+        assert!(bytes.len() > 1_000_000, "only got {} bytes", bytes.len());
+        assert_eq!(&bytes[0..3], b"ID3");
     }
+}
+
+/// A stable install id, derived from this machine and user rather than a
+/// random number each call, which NetEase's risk control finds suspicious.
+fn device_id() -> String {
+    let seed = format!(
+        "needle:{}:{}",
+        std::env::var("USER").unwrap_or_default(),
+        std::env::var("HOME").unwrap_or_default()
+    );
+    let digest = format!("{:x}", Md5::digest(seed.as_bytes())).to_uppercase();
+    digest.repeat(2).chars().take(52).collect()
 }

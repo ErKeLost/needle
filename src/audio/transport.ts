@@ -19,6 +19,7 @@ export class Transport {
 
   duration = 0;
   onEnded: (() => void) | null = null;
+  onError: ((message: string) => void) | null = null;
 
   async load(source: AudioSource, durationHint = 0): Promise<void> {
     this.reset();
@@ -47,6 +48,7 @@ export class Transport {
     });
     element.addEventListener("error", () => {
       this.playing = false;
+      this.onError?.("音频读不出来：文件可能没下载完整");
     });
     this.element = element;
   }

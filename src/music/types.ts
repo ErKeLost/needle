@@ -70,6 +70,8 @@ export type MusicSource = {
   can(what: "library" | "search" | "stream" | "lyrics" | "open"): boolean;
   tracks(): Promise<Track[]>;
   search?(query: string): Promise<Track[]>;
-  stream(track: Track): Promise<Stream>;
+  /** What to put on the platter when nothing was played yet. */
+  chart?(limit?: number): Promise<Track[]>;
+  stream(track: Track, options?: { cookie?: string }): Promise<Stream>;
   lyrics?(track: Track): Promise<StageLine[]>;
 };

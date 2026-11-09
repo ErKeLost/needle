@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Button, Dropdown, Label } from "@heroui/react";
 import type { MusicSource } from "../music/types";
 
 type Props = {
@@ -10,87 +10,52 @@ type Props = {
 };
 
 export function SourceMenu({ sources, activeId, onPick, onOpenFiles, onSearch }: Props) {
-  const [open, setOpen] = useState(false);
-  const root = useRef<HTMLDivElement>(null);
   const active = sources.find((source) => source.id === activeId) ?? sources[0];
 
-  useEffect(() => {
-    if (!open) return;
-    const close = (event: MouseEvent) => {
-      if (!root.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const escape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    window.addEventListener("mousedown", close);
-    window.addEventListener("keydown", escape);
-    return () => {
-      window.removeEventListener("mousedown", close);
-      window.removeEventListener("keydown", escape);
-    };
-  }, [open]);
-
   return (
-    <div className="source" ref={root}>
-      <button
-        type="button"
-        className="source__button"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
+    <Dropdown>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="gap-2 font-mono text-[10.5px] font-normal text-[var(--paper-46)]"
+        aria-label="Source"
       >
         <span className="source__dot" aria-hidden />
         {active.name}
-        <svg width="9" height="9" viewBox="0 0 10 10" aria-hidden className={open ? "source__chevron is-open" : "source__chevron"}>
+        <svg width="9" height="9" viewBox="0 0 10 10" aria-hidden>
           <path d="M2 4l3 3 3-3" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
         </svg>
-      </button>
+      </Button>
 
-      {open && (
-        <div className="source__menu" role="menu" aria-label="Source">
-          {sources.map((source) => (
-            <button
-              key={source.id}
-              type="button"
-              role="menuitemradio"
-              aria-checked={source.id === active.id}
-              className="source__item"
-              onClick={() => {
-                setOpen(false);
-                onPick(source);
-              }}
-            >
-              <span>{source.name}</span>
-              <em>{source.detail}</em>
-            </button>
-          ))}
-          <div className="source__divider" role="separator" />
-          <button
-            type="button"
-            role="menuitem"
-            className="source__item source__item--action"
-            onClick={() => {
-              setOpen(false);
+      <Dropdown.Popover>
+        <Dropdown.Menu
+          onAction={(key) => {
+            const id = String(key);
+            if (id === "search") {
               onSearch();
-            }}
-          >
-            <span>Search…</span>
-            <em>⌘K</em>
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            className="source__item source__item--action"
-            onClick={() => {
-              setOpen(false);
+              return;
+            }
+            if (id === "files") {
               onOpenFiles();
-            }}
-          >
-            <span>Open files…</span>
-            <em>⌘O</em>
-          </button>
-        </div>
-      )}
-    </div>
+              return;
+            }
+            const next = sources.find((source) => source.id === id);
+            if (next) onPick(next);
+          }}
+        >
+          {sources.map((source) => (
+            <Dropdown.Item key={source.id} id={source.id} textValue={source.name}>
+              <Label>{source.name}</Label>
+            </Dropdown.Item>
+          ))}
+          <Dropdown.Item id="search" textValue="Search">
+            <Label>Search…</Label>
+          </Dropdown.Item>
+          <Dropdown.Item id="files" textValue="Open files">
+            <Label>Open files…</Label>
+          </Dropdown.Item>
+        </Dropdown.Menu>
+      </Dropdown.Popover>
+    </Dropdown>
   );
 }

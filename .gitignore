@@ -6,3 +6,5 @@ src-tauri/target
 # the reference project is a submodule, tracked by commit
 !vendor/mygo-music
 shots/
+shots/
+.agents/

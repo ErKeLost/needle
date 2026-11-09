@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Button, Slider, Switch, TextArea, TextField } from "@heroui/react";
 import { invoke } from "@tauri-apps/api/core";
 import { clock } from "../music/notes";
 import type { MusicSource, Track } from "../music/types";
@@ -13,7 +14,9 @@ type Props = {
   localCount: number;
   current: Track;
   playing: boolean;
+  accounts: Record<string, string>;
   onChange: (patch: Partial<Settings>) => void;
+  onAccount: (id: string, value: string) => void;
   onClose: () => void;
   onSearch: (source: MusicSource) => void;
   onOpenFiles: () => void;
@@ -30,7 +33,9 @@ export function SettingsView({
   localCount,
   current,
   playing,
+  accounts,
   onChange,
+  onAccount,
   onClose,
   onSearch,
   onOpenFiles,
@@ -53,12 +58,12 @@ export function SettingsView({
   return (
     <div className="sheet">
       <header className="sheet__bar" data-tauri-drag-region>
-        <button type="button" className="back" onClick={onClose}>
+        <Button variant="ghost" size="sm" onPress={onClose} className="text-[var(--paper-46)]">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
             <path d="M14 5l-7 7 7 7" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
           Now playing
-        </button>
+        </Button>
         <span className="sheet__brand">Needle</span>
       </header>
 
@@ -92,21 +97,21 @@ export function SettingsView({
                   </div>
                   <div className="row__control">
                     {isLocal && (
-                      <button type="button" className="action" onClick={onOpenFiles} disabled={!on}>
+                      <Button size="sm" variant="outline" isDisabled={!on} onPress={onOpenFiles}>
                         Open files
-                      </button>
+                      </Button>
                     )}
                     {hasSearch && (
-                      <button type="button" className="action" onClick={() => onSearch(source)} disabled={!on}>
+                      <Button size="sm" variant="outline" isDisabled={!on} onPress={() => onSearch(source)}>
                         Search
-                      </button>
+                      </Button>
                     )}
                     {!isLocal && !hasSearch && (
-                      <button type="button" className="action" onClick={() => onPlaySource(source)} disabled={!on}>
+                      <Button size="sm" variant="outline" isDisabled={!on} onPress={() => onPlaySource(source)}>
                         Play
-                      </button>
+                      </Button>
                     )}
-                    <Switch
+                    <Toggle
                       checked={on}
                       label={`${source.name} in the source menu`}
                       onChange={(value) =>
@@ -117,6 +122,27 @@ export function SettingsView({
                 </div>
               );
             })}
+          </div>
+        </section>
+
+        <section className="group" aria-labelledby="accounts-heading">
+          <h2 className="group__title" id="accounts-heading">
+            Accounts
+          </h2>
+          <div className="group__rows">
+            {[
+              { id: "netease", name: "网易云音乐", hint: "MUSIC_U=…", where: "music.163.com" },
+              { id: "qq", name: "QQ 音乐", hint: "uin=o…; qm_keystones=…", where: "y.qq.com" },
+            ].map((account) => (
+              <AccountRow
+                key={account.id}
+                name={account.name}
+                hint={account.hint}
+                where={account.where}
+                value={accounts[account.id] ?? ""}
+                onSave={(value) => onAccount(account.id, value)}
+              />
+            ))}
           </div>
         </section>
 
@@ -131,15 +157,19 @@ export function SettingsView({
                 <span className="row__note">{Math.round(volume * 100)}%</span>
               </div>
               <div className="row__control">
-                <input
-                  className="slider"
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={Math.round(volume * 100)}
-                  onChange={(event) => onChange({ volume: Number(event.target.value) / 100 })}
+                <Slider
                   aria-label="Volume"
-                />
+                  className="w-44"
+                  minValue={0}
+                  maxValue={100}
+                  value={Math.round(volume * 100)}
+                  onChange={(next) => onChange({ volume: Number(next) / 100 })}
+                >
+                  <Slider.Track>
+                    <Slider.Fill />
+                    <Slider.Thumb />
+                  </Slider.Track>
+                </Slider>
               </div>
             </div>
             <div className="row">
@@ -148,7 +178,7 @@ export function SettingsView({
                 <span className="row__note">Play the built-in side when the window opens</span>
               </div>
               <div className="row__control">
-                <Switch
+                <Toggle
                   checked={settings.autoplay}
                   label="Play on open"
                   onChange={(value) => onChange({ autoplay: value })}
@@ -169,7 +199,7 @@ export function SettingsView({
                 <span className="row__note">Spin while a side plays</span>
               </div>
               <div className="row__control">
-                <Switch checked={settings.spin} label="Turn the platter" onChange={(value) => onChange({ spin: value })} />
+                <Toggle checked={settings.spin} label="Turn the platter" onChange={(value) => onChange({ spin: value })} />
               </div>
             </div>
             <div className="row">
@@ -221,7 +251,7 @@ export function SettingsView({
                 <span className="row__note">Hold the lines above and below out of focus</span>
               </div>
               <div className="row__control">
-                <Switch
+                <Toggle
                   checked={settings.neighborBlur}
                   label="Blur neighbour lines"
                   onChange={(value) => onChange({ neighborBlur: value })}
@@ -268,11 +298,11 @@ export function SettingsView({
               </div>
               <div className="row__control">
                 <span className="row__mono">{usage ? bytes(usage.bytes) : "—"}</span>
-                <button
-                  type="button"
-                  className="action"
-                  disabled={!usage || usage.bytes === 0}
-                  onClick={async () => {
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  isDisabled={!usage || usage.bytes === 0}
+                  onPress={async () => {
                     try {
                       setUsage(await invoke<Usage>("cache_clear"));
                     } catch {
@@ -281,7 +311,7 @@ export function SettingsView({
                   }}
                 >
                   Clear
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -333,26 +363,37 @@ export function SettingsView({
         <span className="sheet__foot-meta">
           {current.artist} · {clock(current.duration)}
         </span>
-        <button type="button" className="sheet__foot-play" onClick={onToggle} aria-label={playing ? "Pause" : "Play"}>
+        <Button
+          isIconOnly
+          variant="outline"
+          className="rounded-full"
+          onPress={onToggle}
+          aria-label={playing ? "Pause" : "Play"}
+        >
           {playing ? <PauseIcon /> : <PlayIcon />}
-        </button>
+        </Button>
       </footer>
     </div>
   );
 }
 
-function Switch({ checked, onChange, label }: { checked: boolean; onChange: (value: boolean) => void; label: string }) {
+function Toggle({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: (value: boolean) => void;
+  label: string;
+}) {
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      className="switch"
-      onClick={() => onChange(!checked)}
-    >
-      <span className="switch__knob" />
-    </button>
+    <Switch isSelected={checked} onChange={onChange} aria-label={label} size="sm">
+      <Switch.Content>
+        <Switch.Control>
+          <Switch.Thumb />
+        </Switch.Control>
+      </Switch.Content>
+    </Switch>
   );
 }
 
@@ -368,17 +409,16 @@ function Segmented({
   label: string;
 }) {
   return (
-    <div className="segmented" role="group" aria-label={label}>
+    <div className="flex items-center gap-1" role="group" aria-label={label}>
       {options.map((option) => (
-        <button
-          type="button"
+        <Button
           key={option.value}
-          className="segmented__item"
-          aria-pressed={option.value === value}
-          onClick={() => onChange(option.value)}
+          size="sm"
+          variant={option.value === value ? "secondary" : "ghost"}
+          onPress={() => onChange(option.value)}
         >
           {option.label}
-        </button>
+        </Button>
       ))}
     </div>
   );
@@ -390,4 +430,60 @@ function bytes(value: number): string {
   if (mb < 1) return `${Math.round(value / 1024)} KB`;
   if (mb < 1024) return `${mb.toFixed(1)} MB`;
   return `${(mb / 1024).toFixed(1)} GB`;
+}
+
+function AccountRow({
+  name,
+  hint,
+  where,
+  value,
+  onSave,
+}: {
+  name: string;
+  hint: string;
+  where: string;
+  value: string;
+  onSave: (value: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  const saved = value.trim().length > 0;
+
+  return (
+    <div className="account">
+      <div className="account__head">
+        <span className="row__name">{name}</span>
+        <span className="account__state">{saved ? "已登录" : "未登录"}</span>
+      </div>
+      <p className="row__note">
+        在浏览器登录 {where}，从开发者工具复制 Cookie 粘到这里。只存在这台机器，只发给该音源。
+      </p>
+      <TextField className="mt-2 w-full" aria-label={`${name} Cookie`}>
+        <TextArea
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          placeholder={hint}
+          spellCheck={false}
+          rows={2}
+          className="font-mono text-[10.5px]"
+        />
+      </TextField>
+      <div className="account__actions">
+        <Button size="sm" variant="secondary" onPress={() => onSave(draft)} isDisabled={draft === value}>
+          Save
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onPress={() => {
+            setDraft("");
+            onSave("");
+          }}
+          isDisabled={!saved && !draft}
+        >
+          Clear
+        </Button>
+      </div>
+    </div>
+  );
 }
