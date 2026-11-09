@@ -2052,3 +2052,13 @@ kbd {
   background: var(--ember);
   transform-origin: left center;
 }
+
+/* Every line starts on the same left edge, whatever its scale. */
+.lane__row {
+  transform-origin: left center;
+}
+
+.lane--words .lane__tokens {
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}

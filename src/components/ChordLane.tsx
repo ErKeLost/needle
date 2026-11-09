@@ -80,10 +80,18 @@ function LaneRow({
 
     const fit = () => {
       element.style.fontSize = "";
+      element.style.transform = "";
       const available = element.clientWidth;
       const needed = element.scrollWidth;
       if (needed > available + 1) {
+        // Font-size first, so the line keeps its weight; a squeeze only if the
+        // words are still wider than the stage at the smallest size.
         element.style.fontSize = `${Math.max(52, (available / needed) * 100)}%`;
+        const after = element.scrollWidth;
+        if (after > available + 1) {
+          element.style.transform = `scaleX(${available / after})`;
+          element.style.transformOrigin = "left center";
+        }
       }
     };
 
