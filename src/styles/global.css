@@ -793,6 +793,7 @@ button {
 /* ------------------------------------------------------------------ footer */
 
 .transport {
+  display: none;
   position: absolute;
   left: 50%;
   bottom: 72px;
@@ -843,6 +844,7 @@ button {
 }
 
 .clock {
+  display: none;
   position: absolute;
   right: 40px;
   bottom: 78px;
@@ -1659,4 +1661,112 @@ kbd {
 .account__error {
   font-size: 11px;
   color: #ff9a80;
+}
+
+/* ------------------------------------------------------------------- dock */
+
+.dock {
+  position: absolute;
+  left: 41%;
+  right: 5.5%;
+  bottom: 22px;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dock__line {
+  padding: 0 2px;
+}
+
+.dock__row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  min-height: 52px;
+}
+
+.dock__time {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--paper-46);
+  font-variant-numeric: tabular-nums;
+}
+
+.dock__time--total {
+  color: var(--paper-30);
+}
+
+.dock__controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dock__right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* The one filled surface on the page: the needle-down button. */
+.play {
+  width: 52px;
+  min-width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  background: var(--paper);
+  color: #0b090b;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.4) inset,
+    0 10px 24px rgba(0, 0, 0, 0.45);
+  transition: background-color 150ms linear, transform 150ms var(--ease);
+}
+
+.play:hover,
+.play[data-hovered="true"] {
+  background: #ffffff;
+}
+
+.play:active,
+.play[data-pressed="true"] {
+  transform: scale(0.97);
+}
+
+.play svg {
+  width: 18px;
+  height: 18px;
+}
+
+.dock .slider__track {
+  height: 2px;
+  background: rgba(243, 236, 227, 0.12);
+  border-radius: 2px;
+}
+
+.dock .slider__fill {
+  background: rgba(243, 236, 227, 0.6);
+}
+
+.dock .slider__thumb {
+  width: 9px;
+  height: 9px;
+  min-width: 9px;
+  margin-top: -1px;
+  border: 0;
+  background: var(--paper);
+  box-shadow: 0 0 0 4px rgba(243, 236, 227, 0.08);
+  opacity: 0;
+  transition: opacity 160ms linear;
+}
+
+.dock__line:hover .slider__thumb,
+.dock .slider__thumb:focus-visible {
+  opacity: 1;
+}
+
+.dock .slider {
+  padding-block: 0;
 }
