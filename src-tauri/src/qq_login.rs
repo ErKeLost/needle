@@ -35,10 +35,11 @@ fn hash33(text: &str, seed: u32) -> u32 {
 #[tauri::command]
 pub async fn qq_qr_create() -> Result<Value, String> {
     let url = format!(
-        "https://ssl.ptlogin2.qq.com/ptqrshow?appid={APPID}&e=2&l=M&s=3&d=72&v=4&t={}&daid={DAID}&pt_3rd_aid={THIRD_AID}",
+        "https://ssl.ptlogin2.qq.com/ptqrshow?appid={APPID}&daid={DAID}&pt_3rd_aid={THIRD_AID}&u1={}&s=8&e=0&type=1&t={}",
+        urlencode("https://graph.qq.com/oauth2.0/login_jump"),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map(|time| time.as_millis())
+            .map(|time| time.as_nanos())
             .unwrap_or(1)
     );
     let response = client()?
@@ -55,8 +56,8 @@ pub async fn qq_qr_create() -> Result<Value, String> {
             qrsig = rest.split(';').next().unwrap_or("").to_string();
         }
     }
-    let png = response
-        .bytes()
+    let body = response
+        .text()
         .await
         .map_err(|error| format!("QQ 二维码读取失败：{error}"))?;
     if qrsig.is_empty() {
@@ -64,7 +65,22 @@ pub async fn qq_qr_create() -> Result<Value, String> {
     }
     *QRSIG.lock().unwrap() = Some(qrsig);
 
-    Ok(json!({ "png": png.to_vec() }))
+    let payload = body
+        .trim()
+        .trim_start_matches("ptui_qrcode_CB(")
+        .trim_end_matches(");")
+        .trim_end_matches(')');
+    let parsed: Value = serde_json::from_str(payload)
+        .map_err(|error| format!("QQ 二维码内容无法解析：{error}"))?;
+    let qrcode = parsed.get("qrcode").and_then(Value::as_str).unwrap_or("");
+    if qrcode.is_empty() {
+        return Err(parsed
+            .get("em")
+            .and_then(Value::as_str)
+            .unwrap_or("QQ 没有给出二维码")
+            .to_string());
+    }
+    Ok(json!({ "qrcode": qrcode }))
 }
 
 /// 65 waiting, 66 scanned, 67 cancelled, 0 done (the url is the check_sig).
@@ -310,4 +326,18 @@ fn device_id() -> String {
     std::env::var("USER").unwrap_or_default().hash(&mut hasher);
     let value = hasher.finish() % 10_000_000_000;
     format!("{value:010}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    #[ignore]
+    async fn creates_and_polls_a_qr() {
+        let created = qq_qr_create().await.unwrap();
+        assert!(created["qrcode"].as_str().map(|text| text.starts_with("http")).unwrap_or(false));
+        let status = qq_qr_poll().await.unwrap();
+        assert!(matches!(status["code"].as_str().unwrap_or(""), "65" | "66" | "67" | "0"));
+    }
 }

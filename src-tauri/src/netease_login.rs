@@ -62,3 +62,16 @@ pub async fn netease_qr_poll(key: String) -> Result<Value, String> {
     let code = body.get("code").and_then(Value::as_i64).unwrap_or(-1);
     Ok(json!({ "code": code, "cookie": cookie, "message": body.get("message").cloned().unwrap_or(Value::Null) }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    #[ignore]
+    async fn creates_a_qr() {
+        let answer = netease_qr_create().await.unwrap();
+        assert!(answer["key"].as_str().unwrap().len() > 10);
+        assert!(answer["url"].as_str().unwrap().contains("codekey="));
+    }
+}
