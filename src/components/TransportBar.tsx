@@ -57,7 +57,7 @@ export function TransportBar({
             variant="ghost"
             aria-label="Previous"
             onPress={onPrev}
-            className="size-9 min-w-9 text-[var(--paper-72)] data-[hovered=true]:text-[var(--paper)]"
+            className="bar__btn"
           >
             <PrevIcon />
           </Button>
@@ -76,7 +76,7 @@ export function TransportBar({
             variant="ghost"
             aria-label="Next"
             onPress={onNext}
-            className="size-9 min-w-9 text-[var(--paper-72)] data-[hovered=true]:text-[var(--paper)]"
+            className="bar__btn"
           >
             <NextIcon />
           </Button>

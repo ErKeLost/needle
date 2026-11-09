@@ -1934,3 +1934,53 @@ kbd {
 .bar .slider__track {
   background: rgba(243, 236, 227, 0.3);
 }
+
+/* Controls: one rhythm, three equal hit areas, one filled button. */
+.bar__controls {
+  gap: 14px;
+}
+
+.bar__btn {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  color: var(--paper-72);
+}
+
+.bar__btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.bar__btn[data-hovered="true"] {
+  color: var(--paper);
+  background: rgba(243, 236, 227, 0.06);
+}
+
+.bar__play {
+  width: 46px;
+  min-width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  background: var(--paper);
+  color: #0b090b;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+}
+
+.bar__play svg {
+  width: 18px;
+  height: 18px;
+}
+
+.bar__play[data-hovered="true"] {
+  background: #ffffff;
+}
+
+.source__name svg {
+  flex: none;
+}
+
+.meta {
+  top: 22px;
+  right: 24px;
+}

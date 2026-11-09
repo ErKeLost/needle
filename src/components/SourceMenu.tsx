@@ -18,10 +18,10 @@ export function SourceMenu({ sources, activeId, onPick, onOpenFiles, onSearch }:
       <Button
         variant="ghost"
         size="sm"
-        className="gap-2 font-mono text-[10.5px] font-normal text-[var(--paper-46)]"
+        className="h-9 gap-2.5 px-2 text-[12.5px] font-normal text-[var(--paper-72)]"
         aria-label="Source"
       >
-        <SourceLogo id={active.id} />
+        <SourceLogo id={active.id} size={22} />
         {active.name}
         <svg width="9" height="9" viewBox="0 0 10 10" aria-hidden>
           <path d="M2 4l3 3 3-3" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
@@ -47,7 +47,7 @@ export function SourceMenu({ sources, activeId, onPick, onOpenFiles, onSearch }:
           {sources.map((source) => (
             <Dropdown.Item key={source.id} id={source.id} textValue={source.name}>
               <span className="source__name">
-                <SourceLogo id={source.id} />
+                <SourceLogo id={source.id} size={20} />
                 <Label>{source.name}</Label>
               </span>
             </Dropdown.Item>
