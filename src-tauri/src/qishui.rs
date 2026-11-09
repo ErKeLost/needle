@@ -296,7 +296,7 @@ pub async fn qishui_stream(app: AppHandle, id: String) -> Result<Value, String> 
     tokio::fs::create_dir_all(&directory)
         .await
         .map_err(|error| format!("无法建立缓存目录：{error}"))?;
-    let file = directory.join(format!("qishui-{id}.m4a"));
+    let file = directory.join(format!("qishui-{id}.mp4"));
 
     if !file.exists() {
         let answer = qishui_track(app.clone(), id.clone()).await?;
@@ -304,21 +304,40 @@ pub async fn qishui_stream(app: AppHandle, id: String) -> Result<Value, String> 
         if url.is_empty() {
             return Err("这首歌在汽水需要会员或已下架".into());
         }
-        let bytes = client()?
+        let bytes = match client()?
             .get(url)
             .header("User-Agent", UA_PC)
             .send()
             .await
-            .map_err(|error| format!("音频下载失败：{error}"))?
-            .error_for_status()
-            .map_err(|error| format!("音频下载失败：{error}"))?
-            .bytes()
-            .await
-            .map_err(|error| format!("音频读取失败：{error}"))?;
+            .and_then(|response| response.error_for_status())
+        {
+            Ok(response) => response
+                .bytes()
+                .await
+                .map_err(|error| format!("音频读取失败：{error}"))?,
+            Err(first) => {
+                // The VOD host hands out a backup address in the same payload.
+                let backup = answer.get("backup").and_then(Value::as_str).unwrap_or("");
+                if backup.is_empty() {
+                    return Err(format!("音频下载失败：{first}"));
+                }
+                client()?
+                    .get(backup)
+                    .header("User-Agent", UA_PC)
+                    .send()
+                    .await
+                    .map_err(|error| format!("音频下载失败：{error}"))?
+                    .error_for_status()
+                    .map_err(|error| format!("音频下载失败：{error}"))?
+                    .bytes()
+                    .await
+                    .map_err(|error| format!("音频读取失败：{error}"))?
+            }
+        };
         if bytes.len() < 16 * 1024 {
             return Err("汽水只返回了空音频".into());
         }
-        let partial = file.with_extension("m4a.part");
+        let partial = file.with_extension("mp4.part");
         tokio::fs::write(&partial, &bytes)
             .await
             .map_err(|error| format!("无法写入缓存：{error}"))?;
@@ -327,7 +346,7 @@ pub async fn qishui_stream(app: AppHandle, id: String) -> Result<Value, String> 
             .map_err(|error| format!("无法完成缓存：{error}"))?;
     }
 
-    Ok(json!({ "path": file.to_string_lossy(), "kind": "m4a" }))
+    Ok(json!({ "path": file.to_string_lossy(), "kind": "mp4" }))
 }
 
 #[cfg(test)]
