@@ -312,9 +312,17 @@ pub async fn qq_qr_exchange(url: String) -> Result<Value, String> {
         return Err("QQ 登录没有拿到 musickey".into());
     }
     let name = data.get("nick").and_then(Value::as_str).unwrap_or("QQ 音乐");
+    let login_type = if musickey.starts_with("W_X") { 1 } else { 2 };
 
+    // What playback needs is the pair, exactly like the plugin's session.
+    let session = json!({
+        "musicid": musicid,
+        "musickey": musickey,
+        "loginType": login_type,
+        "name": name,
+    });
     Ok(json!({
-        "cookie": format!("uin=o{musicid}; qm_keystones={musickey}; qqmusic_key={musickey}"),
+        "cookie": session.to_string(),
         "name": name,
         "musicid": musicid,
     }))
@@ -345,13 +353,20 @@ mod tests {
 /// Who the musicid belongs to, for the corner of the player.
 #[tauri::command]
 pub async fn qq_profile(cookie: String) -> Result<Value, String> {
-    let uin = cookie
-        .split(';')
-        .find_map(|part| {
-            let (key, value) = part.trim().split_once('=')?;
-            (key == "uin").then(|| value.trim_start_matches('o').to_string())
+    let uin = serde_json::from_str::<Value>(&cookie)
+        .ok()
+        .and_then(|session| {
+            session
+                .get("musicid")
+                .map(|value| value.to_string().trim_matches('"').to_string())
         })
-        .ok_or_else(|| "Cookie 里没有 uin".to_string())?;
+        .or_else(|| {
+            cookie.split(';').find_map(|part| {
+                let (key, value) = part.trim().split_once('=')?;
+                (key == "uin").then(|| value.trim_start_matches('o').to_string())
+            })
+        })
+        .ok_or_else(|| "登录信息里没有 uin".to_string())?;
 
     let url = format!(
         "https://c.y.qq.com/rsc/fcgi-bin/fcg_get_profile_homepage.fcg?format=json&cid=205360838&userid={uin}&reqfrom=1"

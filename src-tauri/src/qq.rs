@@ -14,6 +14,21 @@ const SEARCH: &str = "https://c.y.qq.com/soso/fcgi-bin/client_search_cp";
 const LYRIC: &str = "https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg";
 const MUSICU: &str = "https://u.y.qq.com/cgi-bin/musicu.fcg";
 
+fn hash33(value: &str, init: u32) -> u32 {
+    let mut hash = init;
+    for ch in value.chars() {
+        hash = hash.wrapping_add((hash << 5).wrapping_add(ch as u32));
+    }
+    hash & 0x7fff_ffff
+}
+
+fn guid() -> String {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    std::env::var("USER").unwrap_or_default().hash(&mut hasher);
+    format!("{:016X}{:016X}", hasher.finish(), hasher.finish() ^ 0x9e37_79b9_7f4a_7c15)
+}
+
 fn client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .user_agent(UA)
@@ -75,8 +90,14 @@ pub async fn qq_search(query: String, limit: Option<u32>) -> Result<Value, Strin
                         .join(" / ")
                 })
                 .unwrap_or_default();
+            let media = song
+                .pointer("/file/media_mid")
+                .and_then(Value::as_str)
+                .or_else(|| song.get("media_mid").and_then(Value::as_str))
+                .unwrap_or(mid);
             Some(json!({
                 "id": mid,
+                "media": media,
                 "name": text(song, "songname"),
                 "artist": singer,
                 "album": text(song, "albumname"),
@@ -117,24 +138,118 @@ pub async fn qq_lyric(id: String) -> Result<Value, String> {
 }
 
 #[tauri::command]
-pub async fn qq_stream(app: AppHandle, id: String, cookie: Option<String>) -> Result<Value, String> {
-    let mid = mid_of(&id);
-    let directory = cache_file(&app, &mid, "m4a")?
+pub async fn qq_stream(
+    app: AppHandle,
+    id: String,
+    media: Option<String>,
+    session: Option<String>,
+) -> Result<Value, String> {
+    let directory = cache_file(&app, &id, "m4a")?
         .parent()
         .map(|path| path.to_path_buf())
         .ok_or_else(|| "无法定位缓存目录".to_string())?;
-    for kind in ["m4a", "flac", "mp3"] {
-        let file = directory.join(format!("qq-{mid}.{kind}"));
+    for kind in ["flac", "mp3", "m4a"] {
+        let file = directory.join(format!("qq-{id}.{kind}"));
         if std::fs::metadata(&file).map(|meta| meta.len() > 16 * 1024).unwrap_or(false) {
             return Ok(json!({ "path": file.to_string_lossy(), "kind": kind, "cached": true }));
         }
     }
 
-    let uin = uin_of(cookie.as_deref());
-    let (url, kind) = resolve_stream(&mid, &uin, cookie.as_deref()).await?;
-    let file = cache_file(&app, &mid, &kind)?;
+    let session: Value = serde_json::from_str(
+        session.as_deref().filter(|value| !value.trim().is_empty()).ok_or_else(|| {
+            "QQ 音乐要登录才给音频：点 QQ 音乐扫一次码".to_string()
+        })?,
+    )
+    .map_err(|_| "QQ 登录信息读不出来，重新登录一次".to_string())?;
 
-    if !file.exists() {
+    let uin = session
+        .get("musicid")
+        .map(|value| value.to_string().trim_matches('"').to_string())
+        .unwrap_or_default();
+    let key = session
+        .get("musickey")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+    let login_type = session
+        .get("loginType")
+        .and_then(Value::as_u64)
+        .unwrap_or(2);
+    if uin.is_empty() || key.is_empty() {
+        return Err("QQ 音乐登录已失效，重新扫一次".into());
+    }
+
+    let uid = media.filter(|value| !value.is_empty()).unwrap_or_else(|| id.clone());
+    let g_tk = hash33(&key, 5381);
+    let mut last = "QQ 音乐没有给出播放地址".to_string();
+
+    // The exact chain the MyGo plugin walks: lossless, 320, 128, m4a.
+    for (prefix, ext, kind) in [
+        ("F000", "flac", "flac"),
+        ("M800", "mp3", "mp3"),
+        ("M500", "mp3", "mp3"),
+        ("C400", "m4a", "m4a"),
+    ] {
+        let filename = format!("{prefix}{uid}{uid}.{ext}");
+        let payload = json!({
+            "comm": {
+                "cv": 4747474, "ct": 24, "format": "json",
+                "inCharset": "utf-8", "outCharset": "utf-8", "notice": 0,
+                "platform": "yqq.json", "needNewCode": 1, "uin": uin,
+                "g_tk": g_tk, "g_tk_new_20200303": g_tk,
+                "authst": key, "tmeLoginType": login_type,
+            },
+            "req_0": {
+                "module": "music.vkey.GetVkey",
+                "method": "UrlGetVkey",
+                "param": {
+                    "guid": guid(), "songmid": [id.clone()], "songtype": [0],
+                    "uin": uin, "loginflag": 1, "platform": "20",
+                    "filename": [filename],
+                }
+            }
+        });
+
+        let answer: Value = client()?
+            .post(MUSICU)
+            .header("Referer", YQQ)
+            .header("Origin", "https://y.qq.com")
+            .header("Content-Type", "application/json")
+            .body(payload.to_string())
+            .send()
+            .await
+            .map_err(|error| format!("QQ 音乐连不上：{error}"))?
+            .json()
+            .await
+            .map_err(|error| format!("QQ 音乐返回了无效数据：{error}"))?;
+
+        let info = answer
+            .pointer("/req_0/data/midurlinfo/0")
+            .cloned()
+            .unwrap_or(Value::Null);
+        let purl = text(&info, "purl");
+        let result = info.get("result").and_then(Value::as_i64).unwrap_or(0);
+        if purl.is_empty() || result != 0 {
+            continue;
+        }
+        let sip = answer
+            .pointer("/req_0/data/sip")
+            .and_then(Value::as_array)
+            .map(|list| {
+                list.iter()
+                    .filter_map(Value::as_str)
+                    .find(|value| value.starts_with("https://"))
+                    .or_else(|| list.first().and_then(Value::as_str))
+                    .unwrap_or("https://aqqmusic.tc.qq.com/")
+                    .to_string()
+            })
+            .unwrap_or_else(|| "https://aqqmusic.tc.qq.com/".into());
+        let url = format!(
+            "{}/{}",
+            sip.trim_end_matches('/'),
+            purl.trim_start_matches('/')
+        );
+        let file = cache_file(&app, &id, kind)?;
         let bytes = client()?
             .get(&url)
             .header("Referer", YQQ)
@@ -147,7 +262,8 @@ pub async fn qq_stream(app: AppHandle, id: String, cookie: Option<String>) -> Re
             .await
             .map_err(|error| format!("音频读取失败：{error}"))?;
         if bytes.len() < 16 * 1024 {
-            return Err("QQ 音乐只返回了空音频".into());
+            last = "QQ 音乐只返回了空音频".into();
+            continue;
         }
         let partial = file.with_extension(format!("{kind}.part"));
         tokio::fs::write(&partial, &bytes)
@@ -156,86 +272,10 @@ pub async fn qq_stream(app: AppHandle, id: String, cookie: Option<String>) -> Re
         tokio::fs::rename(&partial, &file)
             .await
             .map_err(|error| format!("无法完成缓存：{error}"))?;
+        return Ok(json!({ "path": file.to_string_lossy(), "kind": kind }));
     }
 
-    Ok(json!({ "path": file.to_string_lossy(), "kind": kind }))
-}
-
-/// The playable address and container for a song mid.
-async fn resolve_stream(mid: &str, uin: &str, cookie: Option<&str>) -> Result<(String, String), String> {
-    let guid = format!(
-        "{}",
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|time| time.as_millis() % 10_000_000_000)
-            .unwrap_or(1)
-    );
-    let payload = json!({
-        "req_0": {
-            "module": "vkey.GetVkeyServer",
-            "method": "CgiGetVkey",
-            "param": {
-                "guid": guid,
-                "songmid": [mid],
-                "songtype": [0],
-                "uin": uin,
-                "loginflag": 1,
-                "platform": "20"
-            }
-        },
-        "comm": { "uin": uin, "format": "json", "ct": 24, "cv": 0 }
-    });
-
-    let mut request = client()?
-        .get(MUSICU)
-        .query(&[("format", "json"), ("data", payload.to_string().as_str())])
-        .header("Referer", YQQ);
-    if let Some(cookie) = cookie.filter(|value| !value.trim().is_empty()) {
-        request = request.header("Cookie", cookie.trim());
-    }
-    let response = request
-        .send()
-        .await
-        .map_err(|error| format!("QQ 音乐连不上：{error}"))?;
-
-    let body: Value = response
-        .json()
-        .await
-        .map_err(|error| format!("QQ 音乐返回了无效数据：{error}"))?;
-
-    let info = body
-        .pointer("/req_0/data/midurlinfo/0")
-        .cloned()
-        .unwrap_or(Value::Null);
-    let purl = text(&info, "purl");
-    if purl.is_empty() {
-        return Err(if uin == "0" || uin.is_empty() {
-            "QQ 音乐要登录才给音频：设置 → 账号，粘贴浏览器里 y.qq.com 的 Cookie".into()
-        } else {
-            "这首歌需要 QQ 音乐会员；当前 Cookie 没有播放权限".into()
-        });
-    }
-    let sip = body
-        .pointer("/req_0/data/sip/0")
-        .and_then(Value::as_str)
-        .unwrap_or("https://dl.stream.qqmusic.qq.com/");
-
-    let url = format!("{sip}{purl}");
-    let kind = if purl.contains(".flac") { "flac" } else { "m4a" }.to_string();
-    Ok((url, kind))
-}
-
-/// QQ stores the listener as `uin=o123456789`; the API takes it as it is.
-fn uin_of(cookie: Option<&str>) -> String {
-    cookie
-        .and_then(|value| {
-            value.split(';').find_map(|part| {
-                let (key, raw) = part.split_once('=')?;
-                (key.trim() == "uin").then(|| raw.trim().to_string())
-            })
-        })
-        .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| "0".into())
+    Err(last)
 }
 
 fn cache_file(app: &AppHandle, mid: &str, kind: &str) -> Result<std::path::PathBuf, String> {
