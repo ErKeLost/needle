@@ -23,7 +23,17 @@ fn signed_in(service_name: &str, cookies: &[String]) -> bool {
     let has = |name: &str| cookies.iter().any(|cookie| cookie.split('=').next() == Some(name));
     match service_name {
         "netease" => has("MUSIC_U"),
-        "qq" => has("uin") && (has("qm_keystones") || has("qqmusic_key") || has("psrf_qqunionid")),
+        "qq" => [
+            "qm_keystones",
+            "qqmusic_key",
+            "psrf_qqunionid",
+            "p_uin",
+            "ptui_loginuin",
+            "skey",
+            "uin",
+        ]
+        .iter()
+        .any(|name| has(name)),
         _ => false,
     }
 }
@@ -53,16 +63,24 @@ pub async fn open_login(app: AppHandle, service_name: String) -> Result<String, 
             break;
         }
 
-        // QQ scopes its cookies to the profile path, so the window's own URL
-        // is the one that sees them; the site root is kept as a fallback.
+        // The store-wide read is the one that sees HTTP-only login cookies;
+        // the per-URL reads are a fallback for runtimes that scope them.
         let mut all: Vec<String> = Vec::new();
+        let mut push = |name: String, value: String| {
+            let pair = format!("{name}={value}");
+            if !all.iter().any(|seen| seen.split('=').next() == Some(name.as_str())) {
+                all.push(pair);
+            }
+        };
+        if let Ok(cookies) = window.cookies() {
+            for cookie in cookies {
+                push(cookie.name().to_string(), cookie.value().to_string());
+            }
+        }
         for target in [window.url().unwrap_or(url.clone()), url.clone()] {
             if let Ok(cookies) = window.cookies_for_url(target) {
                 for cookie in cookies {
-                    let pair = format!("{}={}", cookie.name(), cookie.value());
-                    if !all.iter().any(|seen| seen.split('=').next() == pair.split('=').next()) {
-                        all.push(pair);
-                    }
+                    push(cookie.name().to_string(), cookie.value().to_string());
                 }
             }
         }
