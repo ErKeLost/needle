@@ -66,6 +66,14 @@ subscription says so.
 QQ Music withholds most audio from anonymous callers, so many songs report that
 they need a subscription. The app never substitutes the 30 second preview.
 
+## Soda Music's signer
+
+`src-tauri/resources/qishui` is not in the repository: it holds the compiled
+signer host, ByteDance's `bdms.node` and its platform library, which are not
+ours to redistribute. `docs/qishui.md` records where they come from and how to
+rebuild the host; without them Soda Music search and lyrics still work, and
+playback says the signer is missing.
+
 ## The reference
 
 `vendor/mygo-music` is a submodule of [egoist/mygo-music](https://github.com/egoist/mygo-music),
