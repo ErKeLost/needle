@@ -8,6 +8,10 @@ mod qq;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .setup(|app| {
+            netease::init(app.handle());
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             netease::netease_search,
             netease::netease_chart,

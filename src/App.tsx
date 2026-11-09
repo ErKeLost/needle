@@ -139,10 +139,10 @@ export default function App() {
           // The hot chart: real songs, covers and lyrics, and more than one
           // candidate so a member-only track does not leave the platter empty.
           const chart = (await neteaseSource.chart?.(6)) ?? [];
-          for (const candidate of chart.slice(0, 3)) {
-            if (!alive) return;
-            if (await load(candidate, neteaseSource, false)) return;
-          }
+          // One attempt only: a burst of fallbacks is what gets the address
+          // rate limited in the first place.
+          const first = chart[0];
+          if (first && (await load(first, neteaseSource, false))) return;
         } catch {
           // no network, or NetEase is holding us off
         }

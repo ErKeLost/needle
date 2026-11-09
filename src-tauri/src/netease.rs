@@ -7,7 +7,8 @@
 //! User-Agent the CDN expects.
 
 use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::{Mutex, OnceLock};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use aes::cipher::{block_padding::Pkcs7, BlockEncryptMut, KeyInit};
 use aes::Aes128;
@@ -21,6 +22,79 @@ const EAPI: &str = "https://interfacepc.music.163.com";
 const EAPI_KEY: &str = "e82ckenh8dichen8";
 const UA: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15";
 const EAPI_UA: &str = "NeteaseMusic 9.0.90/5038 (iPhone; iOS 16.2; zh_CN)";
+
+static JAR: OnceLock<Mutex<Vec<(String, String)>>> = OnceLock::new();
+static JAR_PATH: OnceLock<PathBuf> = OnceLock::new();
+static CHART: OnceLock<Mutex<Option<(Instant, Value)>>> = OnceLock::new();
+
+fn jar() -> &'static Mutex<Vec<(String, String)>> {
+    JAR.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+/// Load the cookie jar once, from the app config directory.
+pub fn init(app: &tauri::AppHandle) {
+    use tauri::Manager;
+    let Ok(dir) = app.path().app_config_dir() else { return };
+    let _ = std::fs::create_dir_all(&dir);
+    let path = dir.join("netease.cookies");
+    if let Ok(text) = std::fs::read_to_string(&path) {
+        let mut store = jar().lock().unwrap();
+        for pair in text.split(';') {
+            if let Some((name, value)) = pair.trim().split_once('=') {
+                store.push((name.to_string(), value.to_string()));
+            }
+        }
+    }
+    let _ = JAR_PATH.set(path);
+}
+
+fn save_jar() {
+    if let Some(path) = JAR_PATH.get() {
+        let store = jar().lock().unwrap();
+        let text = store
+            .iter()
+            .map(|(name, value)| format!("{name}={value}"))
+            .collect::<Vec<_>>()
+            .join("; ");
+        let _ = std::fs::write(path, text);
+    }
+}
+
+fn jar_header() -> Option<String> {
+    let store = jar().lock().unwrap();
+    if store.is_empty() {
+        return None;
+    }
+    Some(
+        store
+            .iter()
+            .map(|(name, value)| format!("{name}={value}"))
+            .collect::<Vec<_>>()
+            .join("; "),
+    )
+}
+
+/// Keep whatever the server set, so the next request looks like the same
+/// client. NetEase hands out NMTID this way and treats a missing one as
+/// suspicious.
+fn absorb(headers: &reqwest::header::HeaderMap) {
+    let mut changed = false;
+    for value in headers.get_all(reqwest::header::SET_COOKIE) {
+        let Ok(text) = value.to_str() else { continue };
+        let Some(pair) = text.split(';').next() else { continue };
+        let Some((name, val)) = pair.split_once('=') else { continue };
+        if name.trim().is_empty() || val.trim().is_empty() {
+            continue;
+        }
+        let mut store = jar().lock().unwrap();
+        store.retain(|(seen, _)| seen != name.trim());
+        store.push((name.trim().to_string(), val.trim().to_string()));
+        changed = true;
+    }
+    if changed {
+        save_jar();
+    }
+}
 
 fn client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
@@ -114,6 +188,12 @@ pub async fn netease_search(query: String, limit: Option<u32>) -> Result<Value, 
 #[tauri::command]
 pub async fn netease_chart(limit: Option<u32>) -> Result<Value, String> {
     let limit = limit.unwrap_or(30).clamp(1, 100) as usize;
+    let cache = CHART.get_or_init(|| Mutex::new(None));
+    if let Some((at, body)) = cache.lock().unwrap().as_ref() {
+        if at.elapsed() < std::time::Duration::from_secs(600) {
+            return Ok(limit_tracks(body.clone(), limit));
+        }
+    }
     let response = client()?
         .get(format!("{SITE}/api/playlist/detail"))
         .query(&[("id", "3778678")])
@@ -129,6 +209,7 @@ pub async fn netease_chart(limit: Option<u32>) -> Result<Value, String> {
     if body.get("code").and_then(Value::as_i64) != Some(200) {
         return Err("网易云没有给出排行榜".into());
     }
+    *cache.lock().unwrap() = Some((Instant::now(), body.clone()));
 
     let songs = body
         .pointer("/result/tracks")
@@ -164,6 +245,17 @@ pub async fn netease_chart(limit: Option<u32>) -> Result<Value, String> {
         .collect();
 
     Ok(json!({ "tracks": tracks }))
+}
+
+/// The chart answer is cached whole; each caller takes the slice it asked for.
+fn limit_tracks(body: Value, limit: usize) -> Value {
+    let mut tracks = body
+        .pointer("/result/tracks")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    tracks.truncate(limit);
+    json!({ "tracks": tracks })
 }
 
 /// The original lyric sheet and its translation, as timed LRC.
@@ -372,18 +464,28 @@ async fn eapi(path: &str, params: Value, cookie_in: Option<&str>) -> Result<Valu
     let url = format!("{EAPI}{}", path.replacen("/api/", "/eapi/", 1));
     // -460 is NetEase's risk control, usually brief. The plugin retries once
     // with the same device and account, so we do too.
-    for attempt in 0..2 {
-        let response = client()?
+    for attempt in 0..3 {
+        let mut jar = jar_header().unwrap_or_default();
+        if !cookie.is_empty() {
+            if !jar.is_empty() {
+                jar.push_str("; ");
+            }
+            jar.push_str(&cookie);
+        }
+        let mut request = client()?
             .post(&url)
             .header("User-Agent", EAPI_UA)
             .header("Referer", referer())
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", &cookie)
+            .header("Content-Type", "application/x-www-form-urlencoded");
+        if !jar.is_empty() {
+            request = request.header("Cookie", jar);
+        }
+        let response = request
             .body(format!("params={params}"))
             .send()
             .await
             .map_err(|error| format!("网易云连不上：{error}"))?;
-
+        absorb(response.headers());
         let status = response.status();
         let answer: Value = response
             .json()
@@ -397,8 +499,17 @@ async fn eapi(path: &str, params: Value, cookie_in: Option<&str>) -> Result<Valu
         if code == 200 {
             return Ok(answer);
         }
-        if code == -460 && attempt == 0 {
-            tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+        if code == -460 && attempt < 2 {
+            // 1s → 4s → 12s, each with ±30% jitter so retries do not arrive
+            // as a burst.
+            let base = [1000u64, 4000, 12000][attempt];
+            let spread = (base as f64 * 0.3) as u64;
+            let seed = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|time| time.subsec_nanos() as u64)
+                .unwrap_or(7);
+            let wait = base.saturating_sub(spread) + seed % (spread * 2 + 1);
+            tokio::time::sleep(std::time::Duration::from_millis(wait)).await;
             continue;
         }
         return Err(match code {
