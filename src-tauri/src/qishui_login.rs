@@ -11,6 +11,7 @@ use serde_json::{json, Value};
 const API: &str = "https://api.qishui.com";
 const UA: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36";
 
+#[derive(Clone)]
 struct Identity {
     device: String,
     install: String,
@@ -19,6 +20,7 @@ struct Identity {
 }
 
 static TOKEN: Mutex<Option<String>> = Mutex::new(None);
+static IDENTITY: Mutex<Option<Identity>> = Mutex::new(None);
 static JAR: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
 
 fn seed() -> u64 {
@@ -70,6 +72,13 @@ fn base64url(input: &[u8]) -> String {
         out.push(TABLE[((value << (6 - bits)) & 63) as usize] as char);
     }
     out
+}
+
+/// The passport ties the QR to one device identity; every poll has to use the
+/// same one, or the phone's confirmation is never seen.
+fn current_identity() -> Identity {
+    let mut slot = IDENTITY.lock().unwrap();
+    slot.get_or_insert_with(identity).clone()
 }
 
 fn identity() -> Identity {
@@ -178,6 +187,7 @@ fn cookie_header() -> String {
 #[tauri::command]
 pub async fn qishui_qr_create() -> Result<Value, String> {
     let id = identity();
+    *IDENTITY.lock().unwrap() = Some(id.clone());
     *JAR.lock().unwrap() = Some(HashMap::new());
     let query = passport_query(
         &id,
@@ -215,7 +225,7 @@ pub async fn qishui_qr_create() -> Result<Value, String> {
 #[tauri::command]
 pub async fn qishui_qr_poll() -> Result<Value, String> {
     let token = TOKEN.lock().unwrap().clone().ok_or_else(|| "先取二维码".to_string())?;
-    let id = identity();
+    let id = current_identity();
     let query = passport_query(
         &id,
         &[
@@ -264,6 +274,15 @@ pub async fn qishui_qr_poll() -> Result<Value, String> {
         .unwrap_or_default();
 
     if ["confirmed", "success", "3"].contains(&status.as_str()) {
+        // The confirmation sometimes only hands out the session after the
+        // redirect it returns; follow it once before reading the jar.
+        if let Some(target) = data.get("redirect_url").and_then(Value::as_str) {
+            if target.starts_with("https://") {
+                if let Ok(response) = client()?.get(target).send().await {
+                    absorb(&response);
+                }
+            }
+        }
         let cookie = cookie_header();
         if cookie.is_empty() {
             return Err("汽水没有下发登录 Cookie".into());
