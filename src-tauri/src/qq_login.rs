@@ -341,3 +341,46 @@ mod tests {
         assert!(matches!(status["code"].as_str().unwrap_or(""), "65" | "66" | "67" | "0"));
     }
 }
+
+/// Who the musicid belongs to, for the corner of the player.
+#[tauri::command]
+pub async fn qq_profile(cookie: String) -> Result<Value, String> {
+    let uin = cookie
+        .split(';')
+        .find_map(|part| {
+            let (key, value) = part.trim().split_once('=')?;
+            (key == "uin").then(|| value.trim_start_matches('o').to_string())
+        })
+        .ok_or_else(|| "Cookie 里没有 uin".to_string())?;
+
+    let url = format!(
+        "https://c.y.qq.com/rsc/fcgi-bin/fcg_get_profile_homepage.fcg?format=json&cid=205360838&userid={uin}&reqfrom=1"
+    );
+    let body: Value = reqwest::Client::builder()
+        .user_agent(UA)
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|error| error.to_string())?
+        .get(url)
+        .header("Referer", "https://y.qq.com/")
+        .send()
+        .await
+        .map_err(|error| format!("QQ 连不上：{error}"))?
+        .json()
+        .await
+        .map_err(|error| format!("QQ 返回了无效数据：{error}"))?;
+
+    let creator = body.pointer("/data/creator").cloned().unwrap_or(Value::Null);
+    let name = creator
+        .get("nick")
+        .or_else(|| creator.get("name"))
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    if name.is_empty() {
+        return Err("QQ 没有返回账号信息".into());
+    }
+    Ok(json!({
+        "name": name,
+        "avatar": creator.get("headpic").and_then(Value::as_str).unwrap_or(""),
+    }))
+}

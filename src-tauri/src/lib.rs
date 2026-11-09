@@ -29,11 +29,13 @@ pub fn run() {
             qq_login::qq_qr_create,
             qq_login::qq_qr_poll,
             qq_login::qq_qr_exchange,
+            qq_login::qq_profile,
             netease_login::netease_qr_create,
             netease_login::netease_qr_poll,
             netease_login::netease_profile,
             qishui_login::qishui_qr_create,
             qishui_login::qishui_qr_poll,
+            qishui_login::qishui_profile,
             cache::cache_usage,
             cache::cache_clear,
             auth::open_login

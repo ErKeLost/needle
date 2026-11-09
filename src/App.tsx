@@ -166,12 +166,19 @@ export default function App() {
   // A stored cookie is enough to ask who it belongs to.
   useEffect(() => {
     if (!inTauri()) return;
-    const cookie = accounts.netease;
-    if (!cookie || profiles.netease) return;
-    void invoke<{ name: string; avatar: string }>("netease_profile", { cookie })
-      .then((who) => setProfile("netease", { name: who.name, avatar: who.avatar }))
-      .catch(() => undefined);
-  }, [accounts.netease, profiles.netease, setProfile]);
+    const commands: Record<string, string> = {
+      netease: "netease_profile",
+      qq: "qq_profile",
+      qishui: "qishui_profile",
+    };
+    for (const [id, command] of Object.entries(commands)) {
+      const cookie = accounts[id];
+      if (!cookie || profiles[id]) continue;
+      void invoke<{ name: string; avatar?: string }>(command, { cookie })
+        .then((who) => setProfile(id, { name: who.name, avatar: who.avatar || undefined }))
+        .catch(() => undefined);
+    }
+  }, [accounts, profiles, setProfile]);
 
   // A transient failure is a toast, not a permanent line over the words.
   useEffect(() => {
@@ -372,9 +379,14 @@ export default function App() {
       onDone={(cookie) => {
         setAccount(login.id, cookie);
         accountsRef.current = { ...accountsRef.current, [login.id]: cookie };
-        if (login.id === "netease") {
-          void invoke<{ name: string; avatar: string }>("netease_profile", { cookie })
-            .then((who) => setProfile("netease", { name: who.name, avatar: who.avatar }))
+        const command = {
+          netease: "netease_profile",
+          qq: "qq_profile",
+          qishui: "qishui_profile",
+        }[login.id];
+        if (command) {
+          void invoke<{ name: string; avatar?: string }>(command, { cookie })
+            .then((who) => setProfile(login.id, { name: who.name, avatar: who.avatar || undefined }))
             .catch(() => undefined);
         }
         if (login.after) setSearchSource(login.after);
