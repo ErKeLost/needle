@@ -2,6 +2,7 @@ import type { MusicSource } from "../music/types";
 import { localSource } from "./local";
 import { neteaseSource } from "./netease";
 import { qqSource } from "./qq";
+import { qishuiSource } from "./qishui";
 import { sessionSource } from "./session";
 import { buildSession } from "../music/session";
 
@@ -12,7 +13,7 @@ import { buildSession } from "../music/session";
  * change to the player.
  */
 export function musicSources(session = sessionSource(buildSession())): MusicSource[] {
-  return [session, neteaseSource, qqSource, localSource];
+  return [session, neteaseSource, qqSource, qishuiSource, localSource];
 }
 
-export { localSource, neteaseSource, qqSource, sessionSource };
+export { localSource, neteaseSource, qishuiSource, qqSource, sessionSource };
