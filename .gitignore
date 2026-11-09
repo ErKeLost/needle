@@ -1,0 +1,15 @@
+node_modules
+dist
+src-tauri/target
+.DS_Store
+*.local
+# the reference project is a submodule, tracked by commit
+!vendor/mygo-music
+shots/
+shots/
+.agents/
+
+# Soda Music's signer: the compiled host plus ByteDance's bdms.node and its
+# platform library are not ours to redistribute. docs/qishui.md says how to
+# put them together locally.
+src-tauri/resources/qishui/
