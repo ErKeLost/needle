@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import { useLayoutEffect, useRef } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import type { StageLine, Token, Track } from "../music/types";
 
 type Props = {
@@ -24,6 +25,13 @@ function stateOf(token: Token, time: number): "past" | "on" | "next" {
   if (time >= token.at) return "on";
   return "next";
 }
+
+const rowMotion = {
+  type: "spring" as const,
+  stiffness: 110,
+  damping: 21,
+  mass: 0.9,
+};
 
 export function ChordLane({ track, time }: Props) {
   if (!track.lines.length) {
@@ -63,10 +71,10 @@ function LaneRow({
   kind: Track["kind"];
 }) {
   const tokens = useRef<HTMLDivElement>(null);
+  const calm = useReducedMotion();
   const isCurrent = distance === 0;
+  const depth = Math.abs(distance);
 
-  // A line of chords can run past the stage; long ones set smaller until they
-  // fit rather than spilling off the window.
   useLayoutEffect(() => {
     const element = tokens.current;
     const cell = element?.parentElement;
@@ -82,8 +90,6 @@ function LaneRow({
     };
 
     fit();
-    // Web fonts land after the first layout, and a line measured against the
-    // fallback face is narrower than the one that is drawn.
     void document.fonts?.ready.then(fit);
     const observer = new ResizeObserver(fit);
     observer.observe(cell);
@@ -91,10 +97,28 @@ function LaneRow({
   }, [line]);
 
   return (
-    <div
+    <motion.div
       className={`lane__row${isCurrent ? " is-current" : ""}`}
-      data-distance={Math.abs(distance)}
+      data-distance={depth}
       style={{ "--d": distance } as CSSProperties}
+      initial={
+        calm
+          ? false
+          : { opacity: 0, y: distance * 94 + 24, scale: 0.7, filter: "blur(12px)" }
+      }
+      animate={{
+        opacity: depth === 0 ? 1 : depth === 1 ? 0.5 : 0.28,
+        y: distance * 94,
+        scale: depth === 0 ? 1 : depth === 1 ? 0.86 : 0.72,
+        filter: calm
+          ? "blur(0px)"
+          : depth === 0
+            ? "blur(0px)"
+            : depth === 1
+              ? "blur(1.2px)"
+              : "blur(3.5px)",
+      }}
+      transition={calm ? { duration: 0 } : rowMotion}
       aria-hidden={!isCurrent}
     >
       <span className="lane__section">{line.section ?? ""}</span>
@@ -104,25 +128,25 @@ function LaneRow({
             key={`${line.at}-${i}`}
             token={token}
             time={time}
-            kind={kind}
             current={isCurrent}
+            calm={!!calm}
           />
         ))}
       </div>
-    </div>
+    </motion.div>
   );
 }
 
 function TokenView({
   token,
   time,
-  kind,
   current,
+  calm,
 }: {
   token: Token;
   time: number;
-  kind: Track["kind"];
   current: boolean;
+  calm: boolean;
 }) {
   const state = current ? stateOf(token, time) : "next";
 
@@ -132,10 +156,26 @@ function TokenView({
 
   if (token.word) {
     return (
-      <span className={`token token--word is-${state}`}>
+      <motion.span
+        className={`token token--word is-${state}`}
+        animate={{
+          color: state === "on" ? "#fdf9f3" : state === "past" ? "#cfc7bd" : "#7d766f",
+          scale: state === "on" && !calm ? 1.045 : 1,
+          y: state === "on" && !calm ? -1 : 0,
+        }}
+        transition={{ type: "spring", stiffness: 320, damping: 24 }}
+      >
         {token.word}
-        {state === "on" && <span className="cue" aria-hidden />}
-      </span>
+        {state === "on" && (
+          <motion.span
+            className="word-underline"
+            initial={{ scaleX: 0, opacity: 0.4 }}
+            animate={{ scaleX: 1, opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: calm ? 0 : 0.22, ease: [0.22, 0.61, 0.36, 1] }}
+          />
+        )}
+      </motion.span>
     );
   }
 
@@ -144,15 +184,16 @@ function TokenView({
     <span className={`token is-${state}${grouped ? " token--group" : ""}`}>
       {grouped && <span className="bracket">[</span>}
       {token.notes.map((note, i) => (
-        <span
+        <motion.span
           key={note + i}
           className={`note heat-${i === 0 ? "violet" : (token.heat ?? "gold")}${state === "on" ? " is-on" : ""}`}
+          animate={state === "on" && !calm ? { scale: 1.03 } : { scale: 1 }}
+          transition={{ type: "spring", stiffness: 360, damping: 22 }}
         >
           {note}
-        </span>
+        </motion.span>
       ))}
       {grouped && <span className="bracket">]</span>}
-      {state === "on" && kind === "notes" && <span className="cue" aria-hidden />}
     </span>
   );
 }

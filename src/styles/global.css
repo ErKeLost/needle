@@ -2019,3 +2019,36 @@ kbd {
 .bar__right .slider {
   width: 88px;
 }
+
+/* Motion owns transform, opacity and blur now; CSS only holds the grid. */
+.lane__row,
+.lane__row[data-distance="0"],
+.lane__row[data-distance="1"] {
+  transform: none;
+  opacity: 1;
+  filter: none;
+  transition: none;
+  margin-top: -26px;
+}
+
+.token--word {
+  position: relative;
+  padding: 0 0.04em;
+  display: inline-block;
+  transform-origin: 50% 80%;
+}
+
+.token--word.is-on {
+  box-shadow: none;
+}
+
+.word-underline {
+  position: absolute;
+  left: 0.02em;
+  right: 0.02em;
+  bottom: -0.02em;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--ember);
+  transform-origin: left center;
+}
