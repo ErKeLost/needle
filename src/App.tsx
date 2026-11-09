@@ -470,7 +470,7 @@ export default function App() {
         {dropping && <div className="dropzone" aria-hidden />}
       </main>
       {palette}
-      {login}
+      {loginPanel}
     </>
   );
 }
