@@ -183,6 +183,21 @@ pub async fn netease_search(query: String, limit: Option<u32>) -> Result<Value, 
     Ok(json!({ "tracks": tracks }))
 }
 
+/// The signed entry point MyGo's NetEase plugin uses for the QR login: the
+/// client profile is what keeps 8821 ("risky environment") away.
+pub(crate) async fn eapi_login(path: &str, params: Value) -> Result<Value, String> {
+    eapi(path, params, None).await
+}
+
+/// A cookie the jar has picked up, by name.
+pub(crate) fn jar_cookie(name: &str) -> Option<String> {
+    let store = jar().lock().unwrap();
+    store
+        .iter()
+        .find(|(key, value)| key == name && !value.is_empty())
+        .map(|(_, value)| value.clone())
+}
+
 /// The hot chart, the way the app opens on something that is actually
 /// pressed and shipping this week.
 #[tauri::command]
