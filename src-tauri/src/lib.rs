@@ -3,6 +3,7 @@ mod cache;
 mod netease;
 mod qishui;
 mod netease_login;
+mod qishui_login;
 mod qq_login;
 mod qq;
 
@@ -30,6 +31,8 @@ pub fn run() {
             qq_login::qq_qr_exchange,
             netease_login::netease_qr_create,
             netease_login::netease_qr_poll,
+            qishui_login::qishui_qr_create,
+            qishui_login::qishui_qr_poll,
             cache::cache_usage,
             cache::cache_clear,
             auth::open_login

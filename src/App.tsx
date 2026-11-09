@@ -70,7 +70,7 @@ export default function App() {
   const [duration, setDuration] = useState(0);
   const [dropping, setDropping] = useState(false);
   const [searchSource, setSearchSource] = useState<MusicSource | null>(null);
-  const [loginSource, setLoginSource] = useState<MusicSource | null>(null);
+  const [login, setLogin] = useState<{ id: string; after?: MusicSource } | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const openToken = useRef(0);
 
@@ -257,7 +257,7 @@ export default function App() {
         // Both of these only hand out audio to a signed-in listener; the QR
         // panel runs the same protocol the official apps do.
         if ((next.id === "netease" || next.id === "qq") && !accountsRef.current[next.id] && inTauri()) {
-          setLoginSource(next);
+          setLogin({ id: next.id, after: next });
           return;
         }
         setSearchSource(next);
@@ -353,15 +353,15 @@ export default function App() {
     />
   ) : null;
 
-  const login = loginSource ? (
+  const loginPanel = login ? (
     <LoginPanel
-      service={loginSource.id as "netease" | "qq"}
-      onClose={() => setLoginSource(null)}
+      service={login.id as "netease" | "qq" | "qishui"}
+      onClose={() => setLogin(null)}
       onDone={(cookie) => {
-        setAccount(loginSource.id, cookie);
-        accountsRef.current = { ...accountsRef.current, [loginSource.id]: cookie };
-        setSearchSource(loginSource);
-        setLoginSource(null);
+        setAccount(login.id, cookie);
+        accountsRef.current = { ...accountsRef.current, [login.id]: cookie };
+        if (login.after) setSearchSource(login.after);
+        setLogin(null);
       }}
     />
   ) : null;
@@ -379,6 +379,7 @@ export default function App() {
           onChange={update}
           accounts={accounts}
           onAccount={setAccount}
+          onLogin={(service) => setLogin({ id: service })}
           onClose={() => setView("playing")}
           onSearch={(next) => setSearchSource(next)}
           onOpenFiles={openFiles}
@@ -386,7 +387,7 @@ export default function App() {
           onToggle={toggle}
         />
         {palette}
-        {login}
+        {loginPanel}
       </>
     );
   }

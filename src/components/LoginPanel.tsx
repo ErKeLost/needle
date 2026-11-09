@@ -3,12 +3,12 @@ import { invoke } from "@tauri-apps/api/core";
 import QRCode from "qrcode";
 
 type Props = {
-  service: "netease" | "qq";
+  service: "netease" | "qq" | "qishui";
   onClose: () => void;
   onDone: (cookie: string, name?: string) => void;
 };
 
-const NAME = { netease: "网易云音乐", qq: "QQ 音乐" } as const;
+const NAME = { netease: "网易云音乐", qq: "QQ 音乐", qishui: "汽水音乐" } as const;
 
 /** Scan with the phone app; the window closes when the service says so. */
 export function LoginPanel({ service, onClose, onDone }: Props) {
@@ -39,6 +39,17 @@ export function LoginPanel({ service, onClose, onDone }: Props) {
           if (answer.code === 802) setStatus("已扫码，请在手机上确认");
           if (answer.code === 800) setStatus("二维码过期，重新打开一次");
           if (answer.code === 801) setStatus("等待扫码…");
+        } else if (service === "qishui") {
+          const answer = await invoke<{ status: string; cookie?: string }>("qishui_qr_poll");
+          if (answer.status === "confirmed" && answer.cookie) {
+            finished.current = true;
+            setStatus("登录成功");
+            onDone(answer.cookie);
+            return;
+          }
+          if (answer.status === "scanned") setStatus("已扫码，请在手机上确认");
+          if (answer.status === "expired") setStatus("二维码过期，重新打开一次");
+          if (answer.status === "new") setStatus("等待扫码…");
         } else {
           const answer = await invoke<{ code: string; url: string }>("qq_qr_poll");
           if (answer.code === "0" && answer.url) {
@@ -66,6 +77,14 @@ export function LoginPanel({ service, onClose, onDone }: Props) {
           const created = await invoke<{ key: string; url: string }>("netease_qr_create");
           key = created.key;
           const data = await QRCode.toDataURL(created.url, {
+            margin: 1,
+            width: 232,
+            color: { dark: "#0b090b", light: "#f3ece3" },
+          });
+          if (alive) setImage(data);
+        } else if (service === "qishui") {
+          const created = await invoke<{ qrcode: string }>("qishui_qr_create");
+          const data = await QRCode.toDataURL(created.qrcode, {
             margin: 1,
             width: 232,
             color: { dark: "#0b090b", light: "#f3ece3" },

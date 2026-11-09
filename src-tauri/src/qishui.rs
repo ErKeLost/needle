@@ -246,7 +246,7 @@ fn cover(track: &Value) -> String {
 
 /// One track, with the signed play address and the timed lyric sheet.
 #[tauri::command]
-pub async fn qishui_track(app: AppHandle, id: String) -> Result<Value, String> {
+pub async fn qishui_track(app: AppHandle, id: String, cookie: Option<String>) -> Result<Value, String> {
     let did = device_id();
     let url = signed_url(
         "/luna/pc/track_v2",
@@ -262,6 +262,9 @@ pub async fn qishui_track(app: AppHandle, id: String) -> Result<Value, String> {
     let mut request = client()?.get(&url).header("Accept", "application/json");
     for (name, value) in pairs {
         request = request.header(&name, value);
+    }
+    if let Some(cookie) = cookie.as_deref().filter(|value| !value.trim().is_empty()) {
+        request = request.header("Cookie", cookie.trim());
     }
     let body: Value = request
         .send()
@@ -287,7 +290,7 @@ pub async fn qishui_track(app: AppHandle, id: String) -> Result<Value, String> {
 }
 
 #[tauri::command]
-pub async fn qishui_stream(app: AppHandle, id: String) -> Result<Value, String> {
+pub async fn qishui_stream(app: AppHandle, id: String, cookie: Option<String>) -> Result<Value, String> {
     let directory = app
         .path()
         .app_cache_dir()
@@ -299,7 +302,7 @@ pub async fn qishui_stream(app: AppHandle, id: String) -> Result<Value, String> 
     let file = directory.join(format!("qishui-{id}.mp4"));
 
     if !file.exists() {
-        let answer = qishui_track(app.clone(), id.clone()).await?;
+        let answer = qishui_track(app.clone(), id.clone(), cookie).await?;
         let url = answer.get("url").and_then(Value::as_str).unwrap_or("");
         if url.is_empty() {
             return Err("这首歌在汽水需要会员或已下架".into());

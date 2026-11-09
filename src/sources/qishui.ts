@@ -79,15 +79,21 @@ export const qishuiSource: MusicSource = {
     return answer.tracks.map(qishuiTrack);
   },
 
-  async stream(track) {
+  async stream(track, options) {
     if (!inTauri()) throw new Error("汽水音乐播放需要桌面版");
-    const answer = await invoke<{ path: string }>("qishui_stream", { id: idOf(track) });
+    const answer = await invoke<{ path: string }>("qishui_stream", {
+      id: idOf(track),
+      cookie: options?.cookie ?? null,
+    });
     return { audio: { kind: "url", url: convertFileSrc(answer.path) }, duration: track.duration };
   },
 
   async lyrics(track) {
     if (!inTauri()) return [];
-    const answer = await invoke<TrackAnswer>("qishui_track", { id: idOf(track) });
+    const answer = await invoke<TrackAnswer>("qishui_track", {
+      id: idOf(track),
+      cookie: null,
+    });
     return parseQishuiLyric(answer.lyric);
   },
 };

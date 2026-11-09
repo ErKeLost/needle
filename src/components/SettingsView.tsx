@@ -17,6 +17,7 @@ type Props = {
   accounts: Record<string, string>;
   onChange: (patch: Partial<Settings>) => void;
   onAccount: (id: string, value: string) => void;
+  onLogin: (service: string) => void;
   onClose: () => void;
   onSearch: (source: MusicSource) => void;
   onOpenFiles: () => void;
@@ -36,6 +37,7 @@ export function SettingsView({
   accounts,
   onChange,
   onAccount,
+  onLogin,
   onClose,
   onSearch,
   onOpenFiles,
@@ -133,15 +135,16 @@ export function SettingsView({
             {[
               { id: "netease", name: "网易云音乐", hint: "MUSIC_U=…", where: "music.163.com" },
               { id: "qq", name: "QQ 音乐", hint: "uin=o…; qm_keystones=…", where: "y.qq.com" },
+              { id: "qishui", name: "汽水音乐", hint: "sessionid=…; ttwid=…", where: "汽水音乐 App" },
             ].map((account) => (
               <AccountRow
                 key={account.id}
-                service={account.id}
                 name={account.name}
                 hint={account.hint}
                 where={account.where}
                 value={accounts[account.id] ?? ""}
                 onSave={(value) => onAccount(account.id, value)}
+                onLogin={() => onLogin(account.id)}
               />
             ))}
           </div>
@@ -433,58 +436,20 @@ function bytes(value: number): string {
   return `${(mb / 1024).toFixed(1)} GB`;
 }
 
-function LoginButton({
-  service,
-  onDone,
-  disabled,
-}: {
-  service: string;
-  onDone: (value: string) => void;
-  disabled?: boolean;
-}) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  return (
-    <>
-      <Button
-        size="sm"
-        variant="primary"
-        isDisabled={busy || disabled}
-        onPress={async () => {
-          setBusy(true);
-          setError(null);
-          try {
-            const cookie = await invoke<string>("open_login", { serviceName: service });
-            onDone(cookie);
-          } catch (problem) {
-            setError(typeof problem === "string" ? problem : "登录没有完成");
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        {busy ? "登录中…" : "Log in"}
-      </Button>
-      {error && <span className="account__error">{error}</span>}
-    </>
-  );
-}
-
 function AccountRow({
   name,
   hint,
   where,
   value,
   onSave,
-  service,
+  onLogin,
 }: {
   name: string;
   hint: string;
   where: string;
   value: string;
   onSave: (value: string) => void;
-  service: string;
+  onLogin: () => void;
 }) {
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
@@ -510,7 +475,9 @@ function AccountRow({
         />
       </TextField>
       <div className="account__actions">
-        <LoginButton service={service} onDone={onSave} disabled={!inTauri()} />
+        <Button size="sm" variant="primary" isDisabled={!inTauri()} onPress={onLogin}>
+          Log in
+        </Button>
         <Button size="sm" variant="ghost" onPress={() => onSave(draft)} isDisabled={draft === value}>
           Save
         </Button>
