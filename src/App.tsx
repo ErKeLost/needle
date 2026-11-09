@@ -9,7 +9,8 @@ import { SourceMenu } from "./components/SourceMenu";
 import { TransportBar } from "./components/TransportBar";
 import { Transport } from "./audio/transport";
 import type { MusicSource, Track } from "./music/types";
-import { useAccounts } from "./accounts";
+import { invoke } from "@tauri-apps/api/core";
+import { useAccounts, useProfiles } from "./accounts";
 import { useSettings } from "./settings";
 import { adoptBrowserFiles, inTauri, localSource, pickFiles } from "./sources/local";
 import { neteaseSource } from "./sources/netease";
@@ -56,6 +57,7 @@ export default function App() {
   const allSources = useMemo(() => musicSources(), []);
   const { settings, update } = useSettings();
   const { accounts, setAccount } = useAccounts();
+  const { profiles, setProfile } = useProfiles();
   const accountsRef = useRef(accounts);
   accountsRef.current = accounts;
 
@@ -160,6 +162,16 @@ export default function App() {
   useEffect(() => {
     transport.setVolume(settings.volume);
   }, [settings.volume, transport]);
+
+  // A stored cookie is enough to ask who it belongs to.
+  useEffect(() => {
+    if (!inTauri()) return;
+    const cookie = accounts.netease;
+    if (!cookie || profiles.netease) return;
+    void invoke<{ name: string; avatar: string }>("netease_profile", { cookie })
+      .then((who) => setProfile("netease", { name: who.name, avatar: who.avatar }))
+      .catch(() => undefined);
+  }, [accounts.netease, profiles.netease, setProfile]);
 
   // A transient failure is a toast, not a permanent line over the words.
   useEffect(() => {
@@ -360,6 +372,11 @@ export default function App() {
       onDone={(cookie) => {
         setAccount(login.id, cookie);
         accountsRef.current = { ...accountsRef.current, [login.id]: cookie };
+        if (login.id === "netease") {
+          void invoke<{ name: string; avatar: string }>("netease_profile", { cookie })
+            .then((who) => setProfile("netease", { name: who.name, avatar: who.avatar }))
+            .catch(() => undefined);
+        }
         if (login.after) setSearchSource(login.after);
         setLogin(null);
       }}
@@ -440,6 +457,12 @@ export default function App() {
         />
 
         <header className="meta">
+          {profiles[source.id] && (
+            <span className="meta__me">
+              {profiles[source.id].avatar && <img src={profiles[source.id].avatar} alt="" />}
+              <span>{profiles[source.id].name}</span>
+            </span>
+          )}
           <SourceMenu
             sources={sources}
             activeId={source.id}

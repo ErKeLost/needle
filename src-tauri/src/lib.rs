@@ -31,6 +31,7 @@ pub fn run() {
             qq_login::qq_qr_exchange,
             netease_login::netease_qr_create,
             netease_login::netease_qr_poll,
+            netease_login::netease_profile,
             qishui_login::qishui_qr_create,
             qishui_login::qishui_qr_poll,
             cache::cache_usage,

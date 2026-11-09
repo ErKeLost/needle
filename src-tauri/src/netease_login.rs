@@ -75,3 +75,29 @@ mod tests {
         assert!(answer["url"].as_str().unwrap().contains("codekey="));
     }
 }
+
+/// Who the cookie belongs to, for the corner of the player.
+#[tauri::command]
+pub async fn netease_profile(cookie: String) -> Result<Value, String> {
+    let body: Value = client()?
+        .get(format!("{SITE}/api/user/account"))
+        .header("Referer", format!("{SITE}/"))
+        .header("Cookie", cookie)
+        .send()
+        .await
+        .map_err(|error| format!("网易云连不上：{error}"))?
+        .json()
+        .await
+        .map_err(|error| format!("网易云返回了无效数据：{error}"))?;
+
+    let profile = body.get("profile").cloned().unwrap_or(Value::Null);
+    let name = profile.get("nickname").and_then(Value::as_str).unwrap_or("");
+    if name.is_empty() {
+        return Err("网易云没有返回账号信息".into());
+    }
+    Ok(json!({
+        "name": name,
+        "avatar": profile.get("avatarUrl").and_then(Value::as_str).unwrap_or(""),
+        "id": profile.get("userId").cloned().unwrap_or(Value::Null),
+    }))
+}
