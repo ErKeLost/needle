@@ -256,7 +256,7 @@ export default function App() {
       if (next.can("search")) {
         // Both of these only hand out audio to a signed-in listener; the QR
         // panel runs the same protocol the official apps do.
-        if ((next.id === "netease" || next.id === "qq") && !accountsRef.current[next.id] && inTauri()) {
+        if (["netease", "qq", "qishui"].includes(next.id) && !accountsRef.current[next.id] && inTauri()) {
           setLogin({ id: next.id, after: next });
           return;
         }
