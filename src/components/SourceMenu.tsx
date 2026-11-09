@@ -1,5 +1,6 @@
 import { Button, Dropdown, Label } from "@heroui/react";
 import type { MusicSource } from "../music/types";
+import { SourceLogo } from "./SourceLogo";
 
 type Props = {
   sources: MusicSource[];
@@ -20,7 +21,7 @@ export function SourceMenu({ sources, activeId, onPick, onOpenFiles, onSearch }:
         className="gap-2 font-mono text-[10.5px] font-normal text-[var(--paper-46)]"
         aria-label="Source"
       >
-        <span className="source__dot" aria-hidden />
+        <SourceLogo id={active.id} />
         {active.name}
         <svg width="9" height="9" viewBox="0 0 10 10" aria-hidden>
           <path d="M2 4l3 3 3-3" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
@@ -45,7 +46,10 @@ export function SourceMenu({ sources, activeId, onPick, onOpenFiles, onSearch }:
         >
           {sources.map((source) => (
             <Dropdown.Item key={source.id} id={source.id} textValue={source.name}>
-              <Label>{source.name}</Label>
+              <span className="source__name">
+                <SourceLogo id={source.id} />
+                <Label>{source.name}</Label>
+              </span>
             </Dropdown.Item>
           ))}
           <Dropdown.Item id="search" textValue="Search">

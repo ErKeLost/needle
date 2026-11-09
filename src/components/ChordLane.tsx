@@ -82,6 +82,9 @@ function LaneRow({
     };
 
     fit();
+    // Web fonts land after the first layout, and a line measured against the
+    // fallback face is narrower than the one that is drawn.
+    void document.fonts?.ready.then(fit);
     const observer = new ResizeObserver(fit);
     observer.observe(cell);
     return () => observer.disconnect();

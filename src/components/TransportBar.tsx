@@ -1,11 +1,15 @@
 import { Button, Slider, Tooltip } from "@heroui/react";
 import { clock } from "../music/notes";
+import type { Track } from "../music/types";
 import { NextIcon, PauseIcon, PlayIcon, PrevIcon } from "./icons";
 
 type Props = {
+  track: Track;
   playing: boolean;
   time: number;
   duration: number;
+  volume: number;
+  onVolume: (value: number) => void;
   onToggle: () => void;
   onPrev: () => void;
   onNext: () => void;
@@ -15,14 +19,16 @@ type Props = {
 };
 
 /**
- * The bottom of the deck: one hairline of position across the whole stage,
- * then the time at each end and the three controls in the middle. The play
- * button is the only filled thing on the page.
+ * The bottom of the deck: the side that is playing on the left, the transport
+ * and its position in the middle, and the room's controls on the right.
  */
 export function TransportBar({
+  track,
   playing,
   time,
   duration,
+  volume,
+  onVolume,
   ready,
   onToggle,
   onPrev,
@@ -33,86 +39,124 @@ export function TransportBar({
   const value = Math.min(time, duration || 0);
 
   return (
-    <div className="dock">
-      <div className="dock__line">
+    <div className="bar">
+      <div className="bar__now">
+        <span className="bar__cover" data-empty={!track.artwork}>
+          {track.artwork ? <img src={track.artwork} alt="" /> : <span aria-hidden>✳</span>}
+        </span>
+        <span className="bar__meta">
+          <span className="bar__title">{track.title}</span>
+          <span className="bar__artist">{track.artist}</span>
+        </span>
+      </div>
+
+      <div className="bar__center">
+        <div className="bar__controls">
+          <Button
+            isIconOnly
+            variant="ghost"
+            aria-label="Previous"
+            onPress={onPrev}
+            className="size-9 min-w-9 text-[var(--paper-72)] data-[hovered=true]:text-[var(--paper)]"
+          >
+            <PrevIcon />
+          </Button>
+          <Button
+            isIconOnly
+            variant="ghost"
+            aria-label={playing ? "Pause" : "Play"}
+            aria-busy={!ready}
+            onPress={onToggle}
+            className="size-10 min-w-10 text-[var(--paper)] data-[hovered=true]:text-white"
+          >
+            {playing ? <PauseIcon /> : <PlayIcon />}
+          </Button>
+          <Button
+            isIconOnly
+            variant="ghost"
+            aria-label="Next"
+            onPress={onNext}
+            className="size-9 min-w-9 text-[var(--paper-72)] data-[hovered=true]:text-[var(--paper)]"
+          >
+            <NextIcon />
+          </Button>
+        </div>
+
+        <div className="bar__seek">
+          <span className="bar__time">{clock(time)}</span>
+          <Slider
+            aria-label="Position"
+            className="w-full"
+            value={value}
+            onChange={(next) => onSeek(Number(next))}
+            minValue={0}
+            maxValue={Math.max(duration, 1)}
+            step={0.5}
+          >
+            <Slider.Track>
+              <Slider.Fill />
+              <Slider.Thumb />
+            </Slider.Track>
+          </Slider>
+          <span className="bar__time bar__time--total">{clock(duration)}</span>
+        </div>
+      </div>
+
+      <div className="bar__right">
+        <Tooltip delay={500}>
+          <Button
+            isIconOnly
+            variant="ghost"
+            aria-label="Mute"
+            onPress={() => onVolume(volume > 0 ? 0 : 0.8)}
+            className="size-8 min-w-8 text-[var(--paper-46)] data-[hovered=true]:text-[var(--paper-72)]"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+              {volume > 0 ? (
+                <>
+                  <path d="M4 9v6h4l5 4V5L8 9H4Z" strokeLinejoin="round" />
+                  <path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12" strokeLinecap="round" />
+                </>
+              ) : (
+                <>
+                  <path d="M4 9v6h4l5 4V5L8 9H4Z" strokeLinejoin="round" />
+                  <path d="M17 9l5 6M22 9l-5 6" strokeLinecap="round" />
+                </>
+              )}
+            </svg>
+          </Button>
+          <Tooltip.Content>{volume > 0 ? "Mute" : "Unmute"}</Tooltip.Content>
+        </Tooltip>
         <Slider
-          aria-label="Position"
-          className="w-full"
-          value={value}
-          onChange={(next) => onSeek(Number(next))}
+          aria-label="Volume"
+          className="w-24"
           minValue={0}
-          maxValue={Math.max(duration, 1)}
-          step={0.5}
+          maxValue={100}
+          value={Math.round(volume * 100)}
+          onChange={(next) => onVolume(Number(next) / 100)}
         >
           <Slider.Track>
             <Slider.Fill />
             <Slider.Thumb />
           </Slider.Track>
         </Slider>
-      </div>
-
-      <div className="dock__row">
-        <span className="dock__time">{clock(time)}</span>
-
-        <div className="dock__controls">
-          <Tooltip delay={500}>
-            <Button
-              isIconOnly
-              variant="ghost"
-              aria-label="Previous"
-              onPress={onPrev}
-              className="size-9 min-w-9 text-[var(--paper-46)] data-[hovered=true]:text-[var(--paper)]"
-            >
-              <PrevIcon />
-            </Button>
-            <Tooltip.Content>Previous</Tooltip.Content>
-          </Tooltip>
-
-          <Tooltip delay={500}>
-            <Button
-              isIconOnly
-              aria-label={playing ? "Pause" : "Play"}
-              aria-busy={!ready}
-              onPress={onToggle}
-              className="play"
-            >
-              {playing ? <PauseIcon /> : <PlayIcon />}
-            </Button>
-            <Tooltip.Content>{playing ? "Pause" : "Play"}</Tooltip.Content>
-          </Tooltip>
-
-          <Tooltip delay={500}>
-            <Button
-              isIconOnly
-              variant="ghost"
-              aria-label="Next"
-              onPress={onNext}
-              className="size-9 min-w-9 text-[var(--paper-46)] data-[hovered=true]:text-[var(--paper)]"
-            >
-              <NextIcon />
-            </Button>
-            <Tooltip.Content>Next</Tooltip.Content>
-          </Tooltip>
-        </div>
-
-        <div className="dock__right">
-          <span className="dock__time dock__time--total">{clock(duration)}</span>
-          <Tooltip delay={500}>
-            <Button
-              isIconOnly
-              variant="ghost"
-              aria-label="Settings"
-              onPress={onOpenSettings}
-              className="size-8 min-w-8 text-[var(--paper-30)] data-[hovered=true]:text-[var(--paper-72)]"
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
-                <circle cx="12" cy="12" r="3.2" />
-                <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 8.9 19.3a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.7 15a1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.7 8.9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.7a1.7 1.7 0 0 0 1.03-1.56V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15 4.7a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.3 9c.14.39.48.7.9.85" />
-              </svg>
-            </Button>
-            <Tooltip.Content>Settings</Tooltip.Content>
-          </Tooltip>
-        </div>
+        <Tooltip delay={500}>
+          <Button
+            isIconOnly
+            variant="ghost"
+            aria-label="Settings"
+            onPress={onOpenSettings}
+            className="size-8 min-w-8 text-[var(--paper-46)] data-[hovered=true]:text-[var(--paper-72)]"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+              <path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round" />
+              <circle cx="9" cy="6" r="1.6" fill="var(--ink)" />
+              <circle cx="15" cy="12" r="1.6" fill="var(--ink)" />
+              <circle cx="8" cy="18" r="1.6" fill="var(--ink)" />
+            </svg>
+          </Button>
+          <Tooltip.Content>Settings</Tooltip.Content>
+        </Tooltip>
       </div>
     </div>
   );

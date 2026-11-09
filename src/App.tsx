@@ -6,7 +6,6 @@ import { SearchPanel } from "./components/SearchPanel";
 import { SettingsView } from "./components/SettingsView";
 import { SourceMenu } from "./components/SourceMenu";
 import { TransportBar } from "./components/TransportBar";
-import { SparkMark } from "./components/icons";
 import { Transport } from "./audio/transport";
 import { buildSession } from "./music/session";
 import type { MusicSource, Track } from "./music/types";
@@ -392,16 +391,6 @@ export default function App() {
         />
 
         <header className="meta">
-          <h1 className="meta__title">{track.title}</h1>
-          <p className="meta__artist">
-            <SparkMark size={11} className="meta__mark" />
-            {track.artist}
-          </p>
-          <p className="meta__sheet">
-            {track.kind === "notes" && track.key
-              ? `${track.key} · ${track.bpm} bpm · ${track.lines.length} bars`
-              : track.album}
-          </p>
           <SourceMenu
             sources={sources}
             activeId={source.id}
@@ -416,6 +405,9 @@ export default function App() {
         </div>
 
         <TransportBar
+          track={track}
+          volume={settings.volume}
+          onVolume={(value) => update({ volume: value })}
           playing={playing}
           time={time}
           duration={duration}

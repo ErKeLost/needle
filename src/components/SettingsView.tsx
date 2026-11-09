@@ -64,7 +64,7 @@ export function SettingsView({
           </svg>
           Now playing
         </Button>
-        <span className="sheet__brand">Needle</span>
+        <span className="sheet__brand"><img src="/logo.png" alt="" className="sheet__logo" />Needle</span>
       </header>
 
       <div className="sheet__body">
