@@ -185,7 +185,7 @@ button {
 }
 
 .platter[data-spinning="true"] .disc {
-  animation: spin 5.2s linear infinite;
+  animation: spin 14s linear infinite;
 }
 
 @keyframes spin {
@@ -2437,4 +2437,60 @@ kbd {
 
 .seek:focus-visible .seek__rail {
   box-shadow: 0 0 0 2px rgba(243, 236, 227, 0.25);
+}
+
+/* Room level, drawn with the same hand as the position. */
+.level {
+  display: flex;
+  align-items: center;
+  width: 88px;
+  height: 24px;
+  cursor: pointer;
+  touch-action: none;
+  outline: none;
+}
+
+.level__rail {
+  position: relative;
+  width: 100%;
+  height: 2px;
+  border-radius: 2px;
+  background: rgba(243, 236, 227, 0.2);
+  transition: height 160ms var(--ease), background-color 160ms linear;
+}
+
+.level:hover .level__rail,
+.level[data-dragging="true"] .level__rail {
+  height: 3px;
+  background: rgba(243, 236, 227, 0.28);
+}
+
+.level__fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(243, 236, 227, 0.85);
+  transform-origin: left center;
+}
+
+.level__head {
+  position: absolute;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  background: #f6efe6;
+  opacity: 0;
+  transition: opacity 140ms linear;
+}
+
+.level:hover .level__head,
+.level[data-dragging="true"] .level__head,
+.level:focus-visible .level__head {
+  opacity: 1;
+}
+
+.bar__right {
+  gap: 14px;
 }

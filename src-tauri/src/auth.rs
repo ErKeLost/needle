@@ -53,15 +53,22 @@ pub async fn open_login(app: AppHandle, service_name: String) -> Result<String, 
             break;
         }
 
-        if let Ok(cookies) = window.cookies_for_url(url.clone()) {
-            let all: Vec<String> = cookies
-                .iter()
-                .map(|cookie| format!("{}={}", cookie.name(), cookie.value()))
-                .collect();
-            if signed_in(&service_name, &all) {
-                let _ = window.close();
-                return Ok(all.join("; "));
+        // QQ scopes its cookies to the profile path, so the window's own URL
+        // is the one that sees them; the site root is kept as a fallback.
+        let mut all: Vec<String> = Vec::new();
+        for target in [window.url().unwrap_or(url.clone()), url.clone()] {
+            if let Ok(cookies) = window.cookies_for_url(target) {
+                for cookie in cookies {
+                    let pair = format!("{}={}", cookie.name(), cookie.value());
+                    if !all.iter().any(|seen| seen.split('=').next() == pair.split('=').next()) {
+                        all.push(pair);
+                    }
+                }
             }
+        }
+        if signed_in(&service_name, &all) {
+            let _ = window.close();
+            return Ok(all.join("; "));
         }
 
         tokio::time::sleep(Duration::from_millis(500)).await;

@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { Button, Slider, Tooltip } from "@heroui/react";
+import { Button, Tooltip } from "@heroui/react";
 import { clock } from "../music/notes";
 import type { Track } from "../music/types";
 import { NextIcon, PauseIcon, PlayIcon, PrevIcon } from "./icons";
@@ -110,19 +110,7 @@ export function TransportBar({
               )}
             </svg>
         </Button>
-        <Slider
-          aria-label="Volume"
-          className="w-24"
-          minValue={0}
-          maxValue={100}
-          value={Math.round(volume * 100)}
-          onChange={(next) => onVolume(Number(next) / 100)}
-        >
-          <Slider.Track>
-            <Slider.Fill />
-            <Slider.Thumb />
-          </Slider.Track>
-        </Slider>
+        <Level value={volume} onChange={onVolume} />
         <Tooltip delay={500}>
           <Button
             isIconOnly
@@ -132,10 +120,8 @@ export function TransportBar({
             className="size-8 min-w-8 text-[var(--paper-46)] data-[hovered=true]:text-[var(--paper-72)]"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
-              <path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round" />
-              <circle cx="9" cy="6" r="1.6" fill="var(--ink)" />
-              <circle cx="15" cy="12" r="1.6" fill="var(--ink)" />
-              <circle cx="8" cy="18" r="1.6" fill="var(--ink)" />
+              <circle cx="12" cy="12" r="3.1" />
+              <path d="M12 3.6v2.2M12 18.2v2.2M20.4 12h-2.2M5.8 12H3.6M18 6l-1.6 1.6M7.6 16.4 6 18M18 18l-1.6-1.6M7.6 7.6 6 6" strokeLinecap="round" />
             </svg>
           </Button>
           <Tooltip.Content>Settings</Tooltip.Content>
@@ -200,6 +186,53 @@ function Seekbar({ time, duration, onSeek }: SeekbarProps) {
       <span className="seek__rail">
         <span className="seek__fill" style={{ transform: `scaleX(${ratio})` }} />
         <span className="seek__head" style={{ left: `${ratio * 100}%` }} />
+      </span>
+    </span>
+  );
+}
+
+/** The room's level: the same hairline as the position, at a smaller size. */
+function Level({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+  const rail = useRef<HTMLSpanElement>(null);
+  const [dragging, setDragging] = useState(false);
+
+  const set = (clientX: number) => {
+    const box = rail.current?.getBoundingClientRect();
+    if (!box || box.width === 0) return;
+    onChange(Math.min(1, Math.max(0, (clientX - box.left) / box.width)));
+  };
+
+  return (
+    <span
+      ref={rail}
+      className="level"
+      data-dragging={dragging}
+      role="slider"
+      tabIndex={0}
+      aria-label="Volume"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(value * 100)}
+      onPointerDown={(event) => {
+        event.currentTarget.setPointerCapture(event.pointerId);
+        setDragging(true);
+        set(event.clientX);
+      }}
+      onPointerMove={(event) => {
+        if (dragging) set(event.clientX);
+      }}
+      onPointerUp={(event) => {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+        setDragging(false);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "ArrowLeft") onChange(Math.max(0, value - 0.05));
+        if (event.key === "ArrowRight") onChange(Math.min(1, value + 0.05));
+      }}
+    >
+      <span className="level__rail">
+        <span className="level__fill" style={{ transform: `scaleX(${value})` }} />
+        <span className="level__head" style={{ left: `${value * 100}%` }} />
       </span>
     </span>
   );
