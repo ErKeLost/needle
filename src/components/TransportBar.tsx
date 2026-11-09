@@ -1,3 +1,4 @@
+import { useCallback, useRef, useState } from "react";
 import { Button, Slider, Tooltip } from "@heroui/react";
 import { clock } from "../music/notes";
 import type { Track } from "../music/types";
@@ -36,8 +37,6 @@ export function TransportBar({
   onSeek,
   onOpenSettings,
 }: Props) {
-  const value = Math.min(time, duration || 0);
-
   return (
     <div className="bar">
       <div className="bar__now">
@@ -84,20 +83,7 @@ export function TransportBar({
 
         <div className="bar__seek">
           <span className="bar__time">{clock(time)}</span>
-          <Slider
-            aria-label="Position"
-            className="w-full"
-            value={value}
-            onChange={(next) => onSeek(Number(next))}
-            minValue={0}
-            maxValue={Math.max(duration, 1)}
-            step={0.5}
-          >
-            <Slider.Track>
-              <Slider.Fill />
-              <Slider.Thumb />
-            </Slider.Track>
-          </Slider>
+          <Seekbar time={time} duration={duration} onSeek={onSeek} />
           <span className="bar__time bar__time--total">{clock(duration)}</span>
         </div>
       </div>
@@ -156,5 +142,65 @@ export function TransportBar({
         </Tooltip>
       </div>
     </div>
+  );
+}
+
+type SeekbarProps = {
+  time: number;
+  duration: number;
+  onSeek: (seconds: number) => void;
+};
+
+/** Hand-written position: a hairline that thickens under the hand. */
+function Seekbar({ time, duration, onSeek }: SeekbarProps) {
+  const rail = useRef<HTMLSpanElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const ratio = duration > 0 ? Math.min(1, Math.max(0, time / duration)) : 0;
+
+  const seekTo = useCallback(
+    (clientX: number) => {
+      const box = rail.current?.getBoundingClientRect();
+      if (!box || box.width === 0 || !duration) return;
+      const next = Math.min(1, Math.max(0, (clientX - box.left) / box.width));
+      onSeek(next * duration);
+    },
+    [duration, onSeek],
+  );
+
+  return (
+    <span
+      ref={rail}
+      className="seek"
+      data-dragging={dragging}
+      role="slider"
+      tabIndex={0}
+      aria-label="Position"
+      aria-valuemin={0}
+      aria-valuemax={Math.round(duration)}
+      aria-valuenow={Math.round(time)}
+      aria-valuetext={`${clock(time)} of ${clock(duration)}`}
+      onPointerDown={(event) => {
+        event.currentTarget.setPointerCapture(event.pointerId);
+        setDragging(true);
+        seekTo(event.clientX);
+      }}
+      onPointerMove={(event) => {
+        if (dragging) seekTo(event.clientX);
+      }}
+      onPointerUp={(event) => {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+        setDragging(false);
+      }}
+      onPointerCancel={() => setDragging(false)}
+      onKeyDown={(event) => {
+        if (event.key === "ArrowLeft") onSeek(Math.max(0, time - 5));
+        if (event.key === "ArrowRight") onSeek(Math.min(duration, time + 5));
+      }}
+    >
+      <span className="seek__rail">
+        <span className="seek__fill" style={{ transform: `scaleX(${ratio})` }} />
+        <span className="seek__head" style={{ left: `${ratio * 100}%` }} />
+      </span>
+    </span>
   );
 }
