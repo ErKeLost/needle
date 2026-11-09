@@ -7,16 +7,23 @@ import { SettingsView } from "./components/SettingsView";
 import { SourceMenu } from "./components/SourceMenu";
 import { TransportBar } from "./components/TransportBar";
 import { Transport } from "./audio/transport";
-import { buildSession } from "./music/session";
 import type { MusicSource, Track } from "./music/types";
 import { useAccounts } from "./accounts";
 import { useSettings } from "./settings";
 import { adoptBrowserFiles, inTauri, localSource, pickFiles } from "./sources/local";
 import { neteaseSource } from "./sources/netease";
-import { sessionSource } from "./sources/session";
 import { musicSources } from "./sources";
 
-const SESSION = buildSession();
+const PLACEHOLDER: Track = {
+  id: "nothing",
+  title: "Nothing on the platter",
+  artist: "Pick a source, or press ⌘K",
+  album: "",
+  duration: 0,
+  kind: "words",
+  lines: [],
+  sourceId: "none",
+};
 const LAST_KEY = "needle.last.v2";
 
 type LastPlayed = { sourceId: string; track: Track };
@@ -45,22 +52,21 @@ function writeLast(sourceId: string, track: Track) {
 
 export default function App() {
   const transport = useMemo(() => new Transport(), []);
-  const session = useMemo(() => sessionSource(SESSION), []);
-  const allSources = useMemo(() => musicSources(session), [session]);
+  const allSources = useMemo(() => musicSources(), []);
   const { settings, update } = useSettings();
   const { accounts, setAccount } = useAccounts();
   const accountsRef = useRef(accounts);
   accountsRef.current = accounts;
 
   const [view, setView] = useState<"playing" | "settings">("playing");
-  const [source, setSource] = useState<MusicSource>(session);
-  const [track, setTrack] = useState<Track>(SESSION);
-  const [queue, setQueue] = useState<Track[]>([SESSION]);
+  const [source, setSource] = useState<MusicSource>(neteaseSource);
+  const [track, setTrack] = useState<Track>(PLACEHOLDER);
+  const [queue, setQueue] = useState<Track[]>([]);
   const [localCount, setLocalCount] = useState(0);
   const [ready, setReady] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
-  const [duration, setDuration] = useState(SESSION.duration);
+  const [duration, setDuration] = useState(0);
   const [dropping, setDropping] = useState(false);
   const [searchSource, setSearchSource] = useState<MusicSource | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -119,7 +125,7 @@ export default function App() {
     transport.onError = (message) => setProblem(message);
 
     // Open on the last side, then on a real song, and only fall back to the
-    // built-in session when neither is reachable.
+    // chart when nothing else is reachable.
     let alive = true;
     const boot = async () => {
       const last = readLast();
@@ -137,17 +143,16 @@ export default function App() {
             if (await load(candidate, neteaseSource, false)) return;
           }
         } catch {
-          // no network, or NetEase is holding us off; the session still plays
+          // no network, or NetEase is holding us off
         }
       }
-      if (alive) await load(SESSION, session, false);
     };
     void boot();
     return () => {
       alive = false;
       transport.dispose();
     };
-  }, [allSources, load, session, transport]);
+  }, [allSources, load, transport]);
 
   useEffect(() => {
     transport.setVolume(settings.volume);
@@ -257,7 +262,7 @@ export default function App() {
       }
       setQueue(await next.tracks());
       setView("playing");
-      void load(SESSION, next);
+      void load((await next.tracks())[0], next);
     },
     [load],
   );
