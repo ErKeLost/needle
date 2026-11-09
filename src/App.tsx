@@ -142,6 +142,7 @@ export default function App() {
           // One attempt only: a burst of fallbacks is what gets the address
           // rate limited in the first place.
           const first = chart[0];
+          if (!alive) return;
           if (first && (await load(first, neteaseSource, false))) return;
         } catch {
           // no network, or NetEase is holding us off
