@@ -1,0 +1,8 @@
+node_modules
+dist
+src-tauri/target
+.DS_Store
+*.local
+# the reference project is a submodule, tracked by commit
+!vendor/mygo-music
+shots/
