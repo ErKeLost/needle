@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { useLayoutEffect, useRef } from "react";
+import { memo, useLayoutEffect, useRef } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import type { StageLine, Token, Track } from "../music/types";
 
@@ -138,7 +138,7 @@ function LaneRow({
   );
 }
 
-function TokenView({
+const TokenView = memo(function TokenView({
   token,
   time,
   current,
@@ -172,15 +172,6 @@ function TokenView({
             {token.word}
           </span>
         )}
-        {state === "on" && (
-          <motion.span
-            className="word-underline"
-            initial={{ scaleX: 0, opacity: 0.4 }}
-            animate={{ scaleX: 1, opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: calm ? 0 : 0.22, ease: [0.22, 0.61, 0.36, 1] }}
-          />
-        )}
       </motion.span>
     );
   }
@@ -202,4 +193,4 @@ function TokenView({
       {grouped && <span className="bracket">]</span>}
     </span>
   );
-}
+})
