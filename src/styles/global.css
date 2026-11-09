@@ -2062,3 +2062,48 @@ kbd {
   font-weight: 500;
   letter-spacing: -0.01em;
 }
+
+/* The word being sung catches a sweep of light, like a record's sheen. */
+.shimmer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(
+    100deg,
+    rgba(255, 255, 255, 0) 30%,
+    rgba(255, 255, 255, 0.95) 48%,
+    rgba(255, 255, 255, 0) 66%
+  );
+  background-size: 260% 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer-sweep 2.6s linear infinite;
+}
+
+@keyframes shimmer-sweep {
+  from {
+    background-position: 220% 0;
+  }
+  to {
+    background-position: -120% 0;
+  }
+}
+
+/* Icons, slider and gear share one centre line. */
+.bar__right {
+  align-items: center;
+  height: 48px;
+}
+
+.bar__right > * {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.bar__right .slider {
+  height: 20px;
+  display: flex;
+  align-items: center;
+}

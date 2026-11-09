@@ -107,15 +107,10 @@ function LaneRow({
       className={`lane__row${isCurrent ? " is-current" : ""}`}
       data-distance={depth}
       style={{ "--d": distance } as CSSProperties}
-      initial={
-        calm
-          ? false
-          : { opacity: 0, y: distance * 94 + 24, scale: 0.7, filter: "blur(12px)" }
-      }
+      initial={calm ? false : { opacity: 0, y: distance * 94 + 24, filter: "blur(12px)" }}
       animate={{
         opacity: depth === 0 ? 1 : depth === 1 ? 0.5 : 0.28,
         y: distance * 94,
-        scale: depth === 0 ? 1 : depth === 1 ? 0.86 : 0.72,
         filter: calm
           ? "blur(0px)"
           : depth === 0
@@ -172,6 +167,11 @@ function TokenView({
         transition={{ type: "spring", stiffness: 320, damping: 24 }}
       >
         {token.word}
+        {state === "on" && (
+          <span className="shimmer" aria-hidden>
+            {token.word}
+          </span>
+        )}
         {state === "on" && (
           <motion.span
             className="word-underline"
