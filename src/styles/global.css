@@ -2922,3 +2922,10 @@ kbd {
     inset 0 0 0 2px rgba(0, 0, 0, 0.5),
     inset 0 0 7vh rgba(0, 0, 0, 0.45);
 }
+
+/* The tint now carries a lifted hue, so it can be strong without hiding the
+   grooves underneath. */
+.disc__tint {
+  opacity: 0.82;
+  filter: blur(2px) saturate(1.1);
+}

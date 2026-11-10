@@ -12,6 +12,57 @@ fn hex(rgb: (u8, u8, u8)) -> String {
     format!("#{:02x}{:02x}{:02x}", rgb.0, rgb.1, rgb.2)
 }
 
+/// A dark, dusty cover still has a hue worth pressing. Lift saturation and
+/// lightness so the vinyl takes the colour instead of staying grey.
+fn lively(rgb: (u8, u8, u8)) -> (u8, u8, u8) {
+    let (r, g, b) = (
+        rgb.0 as f32 / 255.0,
+        rgb.1 as f32 / 255.0,
+        rgb.2 as f32 / 255.0,
+    );
+    let max = r.max(g).max(b);
+    let min = r.min(g).min(b);
+    let l = (max + min) / 2.0;
+    let d = max - min;
+    let mut h = 0.0f32;
+    let mut s = if d == 0.0 {
+        0.0
+    } else {
+        d / (1.0 - (2.0 * l - 1.0).abs())
+    };
+    if d != 0.0 {
+        h = if max == r {
+            ((g - b) / d) % 6.0
+        } else if max == g {
+            (b - r) / d + 2.0
+        } else {
+            (r - g) / d + 4.0
+        } * 60.0;
+        if h < 0.0 {
+            h += 360.0;
+        }
+    }
+    s = s.clamp(0.42, 0.86);
+    let l = l.clamp(0.36, 0.56);
+
+    let c = (1.0 - (2.0 * l - 1.0).abs()) * s;
+    let x = c * (1.0 - ((h / 60.0) % 2.0 - 1.0).abs());
+    let m = l - c / 2.0;
+    let (r1, g1, b1) = match h {
+        h if h < 60.0 => (c, x, 0.0),
+        h if h < 120.0 => (x, c, 0.0),
+        h if h < 180.0 => (0.0, c, x),
+        h if h < 240.0 => (0.0, x, c),
+        h if h < 300.0 => (x, 0.0, c),
+        _ => (c, 0.0, x),
+    };
+    (
+        ((r1 + m) * 255.0).round() as u8,
+        ((g1 + m) * 255.0).round() as u8,
+        ((b1 + m) * 255.0).round() as u8,
+    )
+}
+
 #[tauri::command]
 pub async fn cover_palette(url: String) -> Result<Value, String> {
     if url.is_empty() {
@@ -94,8 +145,32 @@ pub async fn cover_palette(url: String) -> Result<Value, String> {
         }
     }
 
-    let hexes: Vec<String> = colors.iter().map(|color| hex(*color)).collect();
+    let hexes: Vec<String> = colors
+        .iter()
+        .enumerate()
+        .map(|(index, color)| {
+            // Keep one quieter tone for depth, lift the other two.
+            if index == 2 {
+                hex(*color)
+            } else {
+                hex(lively(*color))
+            }
+        })
+        .collect();
     let mut cache = CACHE.lock().unwrap();
     cache.get_or_insert_with(HashMap::new).insert(url, hexes.clone());
     Ok(json!({ "colors": hexes }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    #[ignore]
+    async fn reads_a_cover_palette() {
+        let url = std::env::var("COVER_URL").expect("COVER_URL");
+        let answer = cover_palette(url).await;
+        println!("{answer:?}");
+    }
 }
