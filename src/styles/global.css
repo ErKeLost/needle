@@ -2850,3 +2850,21 @@ kbd {
 .disc__tint {
   display: none;
 }
+
+/* Back to the tint that looked right: a colour wash over the photograph,
+   static in the platter so its gradient does not spin with the disc. */
+.disc__tint {
+  display: block;
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  mix-blend-mode: color;
+  opacity: 0.9;
+  filter: blur(4px) saturate(1.15);
+  pointer-events: none;
+}
+
+.disc__art {
+  background-color: transparent;
+  background-blend-mode: normal;
+}
