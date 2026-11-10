@@ -1,98 +1,125 @@
 # Needle
 
 A vinyl-first music player for the desktop. Two pages: the side that is
-playing, and the settings that shape it — nothing else. The play page holds the
-record, the words as they are sung, and where the needle is.
+playing, and the settings that shape it.
 
-Built with Tauri 2 and Vite. Sources are pluggable: the built-in session, local
-files, NetEase Cloud Music and QQ Music all answer the same small interface, so
-the page does not know where a song came from.
+The record is a real object on screen — a pressed disc with grooves, a lifted
+tonearm, a tick halo and a cue arc. The words are timed, and the sung word
+takes the light. Music comes from NetEase Cloud Music, QQ Music, Soda Music or
+files on this machine, each behind the same small source interface.
 
-## Release
+Built with **Tauri 2**, **Vite**, **React**, **HeroUI v3**, **Tailwind 4** and
+**Motion**.
 
-Pushing a tag builds every platform on GitHub:
+## What it does
 
-```bash
-git tag v0.1.0 && git push origin v0.1.0
-```
+- **Play page** — turntable, tonearm, chord/lyric stage, position, volume.
+  The disc keeps the album's colours pressed into its marbling; the label is the
+  cover. Pause lifts the arm and stops the platter; the queue carries on by
+  itself when a side ends.
+- **Lyrics** — LRC from NetEase and QQ, per-character timings from Soda Music,
+  with a shimmer that sweeps the line being sung.
+- **Library drawer** — the account's playlists, liked songs and the charts each
+  service publishes, opened from the button beside the source menu.
+- **Settings** — sources on or off, volume, autoplay, platter spin, label
+  (album art or printed), lyric size, neighbour blur, how the sung word is
+  marked, audio cache size and clearing, the keyboard map.
+- **Sign-in** — QR in the app, the way the phone apps expect it. No password is
+  ever typed here.
 
-`.github/workflows/release.yml` runs on macOS (arm64 + x64), Ubuntu and
-Windows, uploads the bundles and opens a draft release.
+## Sources
+
+| Source | Search | Playback | Lyrics | Library |
+| --- | --- | --- | --- | --- |
+| NetEase Cloud Music | ✓ | ✓ (some songs need an account) | ✓ LRC | playlists, liked, charts |
+| QQ Music | ✓ | ✓ after sign-in | ✓ LRC | playlists, charts |
+| Soda Music | ✓ | ✓ (signed requests) | ✓ per character | — |
+| This machine | — | ✓ | `.lrc` beside the file | — |
+
+Every answer is optional: a source that cannot do something never shows a
+control it cannot honour.
+
+### How a source is written
+
+`src/music/types.ts` describes the interface — `tracks`, `search`, `stream`,
+`lyrics`, `chart`. Add an object in `src/sources/`, register it in
+`src/sources/index.ts`, and it appears in the menu and the settings. The player
+does not know which service it is talking to.
+
+The shape is copied from [MyGo Music](https://github.com/egoist/mygo-music),
+whose sources are JavaScript plugins: one function per capability, one object
+of parameters, the source stamping its own tracks. `vendor/mygo-music` is a
+submodule of it, and `docs/mygo-music.md` records what was learned there;
+`docs/qishui.md` records Soda's signing.
 
 ## Run
 
 ```bash
 npm install
-npm run app        # Tauri window
-npm run dev        # browser, for working on the page
+npm run app      # the desktop window
+npm run dev      # the page in a browser, for layout work
 ```
 
-`npm run dev` proxies NetEase and QQ Music through the Vite server, so search
-and lyrics work in a browser; playback through the network needs the desktop
-window, which signs the requests and caches the audio.
+The browser build proxies NetEase and QQ through the dev server, so search and
+lyrics work there; playback through the network needs the desktop app, which
+signs requests and caches audio.
 
-## Sources
+### Requirements
 
-`src/music/types.ts` describes what a source may answer:
+- Node 20 or newer
+- Rust stable
+- On Linux: `libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf`
 
-| Answer | What it does |
-| --- | --- |
-| `tracks()` | the library a source already has |
-| `search(query)` | find songs |
-| `stream(track)` | an `AudioBuffer` or a URL, plus its headers |
-| `lyrics(track)` | timed lines for the stage |
+## Release
 
-Every answer is optional. A source that only searches never shows a player
-control it cannot honour. This is the shape of a MyGo Music plugin
-(`vendor/mygo-music/internal/music/music.go`), with the same names for the
-functions and the same idea that the source stamps its own tracks.
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
 
-Add a source in `src/sources/`, register it in `src/sources/index.ts`, and its
-name appears in the source menu and in Settings. Nothing in the player changes.
+`.github/workflows/release.yml` builds macOS (Apple Silicon and Intel),
+Windows and Linux, uploads the bundles and opens a draft release.
+`.github/workflows/ci.yml` type-checks and builds every push and pull request.
 
-## Settings
+## Layout
 
-The settings page is the whole configuration surface: sources on or off, volume,
-autoplay, platter spin, label (album art or the printed one), lyric size,
-neighbour blur, how the sung word is marked, the audio cache size and a button
-to empty it, and the keyboard map. Everything persists in `localStorage`.
+```
+src/
+  App.tsx              the two pages and the player state
+  components/          deck, chord lane, transport, search, library, settings
+  sources/             one file per service, plus the registry
+  audio/               transport for buffers and files
+  music/               types, notes, LRC parsing
+src-tauri/
+  src/netease.rs       search, chart, library, player URL, cookie jar, cache
+  src/netease_login.rs QR sign-in (unikey → client/login, through eapi)
+  src/qq.rs            search, charts, playlists, UrlGetVkey playback
+  src/qq_login.rs      QR sign-in and the check_sig → oauth exchange
+  src/qishui.rs        signed track requests and the audio cache
+  src/qishui_login.rs  ByteDance passport QR sign-in
+  src/art.rs           the cover palette the vinyl is dyed with
+docs/                  notes on MyGo Music and on Soda's signing
+```
 
-### NetEase Cloud Music
+## Notes and limits
 
-- Search: `POST /api/cloudsearch/pc`
-- Lyrics: `GET /api/song/lyric`
-- Playback: the encrypted `eapi` `/api/song/enhance/player/url/v1`, then one
-  download into the app cache, because a WebView cannot send the Referer the
-  CDN wants.
+- **Soda Music's signer is not in this repository.** `src-tauri/resources/qishui`
+  holds a compiled host plus ByteDance's `bdms.node` and its platform library,
+  which are not ours to redistribute. Without them, search and lyrics still
+  work and playback says the signer is missing. `docs/qishui.md` explains how
+  to assemble it locally.
+- **NetEase risk control** answers `-460` when an address asks too often; the
+  app keeps a cookie jar, retries with jitter, caches the chart and plays
+  cached audio first. Waiting is part of using it.
+- **QQ Music** needs a signed-in session for audio, and its profile CGI often
+  refuses even then; the name comes from the sign-in response.
+- The app keeps one cached copy per song for playback. Artwork and audio belong
+  to their services.
 
-An account is not required for the songs that are free; a song that needs a
-subscription says so.
+## Credits
 
-### QQ Music
-
-- Search: `client_search_cp`
-- Lyrics: `fcg_query_lyric_new.fcg`
-- Playback: the `vkey` handshake through `musicu.fcg`.
-
-QQ Music withholds most audio from anonymous callers, so many songs report that
-they need a subscription. The app never substitutes the 30 second preview.
-
-## Soda Music's signer
-
-`src-tauri/resources/qishui` is not in the repository: it holds the compiled
-signer host, ByteDance's `bdms.node` and its platform library, which are not
-ours to redistribute. `docs/qishui.md` records where they come from and how to
-rebuild the host; without them Soda Music search and lyrics still work, and
-playback says the signer is missing.
-
-## The reference
-
-`vendor/mygo-music` is a submodule of [egoist/mygo-music](https://github.com/egoist/mygo-music),
-a native Go player that runs each source as a JavaScript plugin. Its source
-interface, plugin manifest and host globals are the model for `MusicSource`
-here; the notes are in `docs/mygo-music.md`.
-
-## Notes
-
-- Art from NetEase and QQ Music belongs to their owners; the app stores one
-  cached copy per song for playback, nothing more.
+- [MyGo Music](https://github.com/egoist/mygo-music) for the source-per-plugin
+  architecture this follows.
+- [HeroUI](https://www.heroui.com) for the controls, [Motion](https://motion.dev)
+  for the stage, [Tailwind CSS](https://tailwindcss.com) for the layout.
+- Instrument Sans and IBM Plex Mono, under the SIL Open Font License.
