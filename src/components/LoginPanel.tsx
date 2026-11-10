@@ -118,13 +118,9 @@ export function LoginPanel({ service, onClose, onDone }: Props) {
           });
           if (alive) setImage(data);
         } else {
-          const created = await invoke<{ qrcode: string }>("qq_qr_create");
-          const data = await QRCode.toDataURL(created.qrcode, {
-            margin: 1,
-            width: 232,
-            color: { dark: "#0b090b", light: "#f3ece3" },
-          });
-          if (alive) setImage(data);
+          const created = await invoke<{ png: number[] }>("qq_qr_create");
+          const blob = new Blob([new Uint8Array(created.png)], { type: "image/png" });
+          if (alive) setImage(URL.createObjectURL(blob));
         }
         if (alive) setStatus("等待扫码…");
         timer = window.setTimeout(poll, gap);
