@@ -374,6 +374,7 @@ export default function App() {
   }, [toggle, seek, step, openFiles, time, duration, view, searchSource]);
 
   const progress = duration > 0 ? Math.min(1, Math.max(0, time / duration)) : 0;
+  const empty = track.id === "nothing";
 
   const palette = searchSource ? (
     <SearchPanel
@@ -481,6 +482,7 @@ export default function App() {
           />
         )}
 
+        {!empty && (
         <RecordDeck
           playing={playing}
           progress={progress}
@@ -490,6 +492,7 @@ export default function App() {
           palette={vinylColors}
           spin={settings.spin}
         />
+        )}
 
         <header className="meta">
           {profiles[source.id] && (
@@ -507,10 +510,18 @@ export default function App() {
           />
         </header>
 
-        <div className="stage">
-          <ChordLane track={track} time={time} />
-        </div>
+        {empty ? (
+          <div className="empty">
+            <p className="empty__title">Choose a source</p>
+            <p className="empty__hint">⌘K to search · the menu at the top right switches sources</p>
+          </div>
+        ) : (
+          <div className="stage">
+            <ChordLane track={track} time={time} />
+          </div>
+        )}
 
+        {!empty && (
         <TransportBar
           track={track}
           volume={settings.volume}
@@ -525,13 +536,14 @@ export default function App() {
           onSeek={seek}
           onOpenSettings={() => setView("settings")}
         />
+        )}
 
-        {!ready && !problem && (
+        {!empty && !ready && !problem && (
           <div className="notice">
             {source.can("search") ? `Fetching from ${source.name}` : "Cutting the lacquer"}
           </div>
         )}
-        {problem && <div className="notice notice--problem">{problem}</div>}
+        {!empty && problem && <div className="notice notice--problem">{problem}</div>}
 
         {dropping && <div className="dropzone" aria-hidden />}
       </main>
