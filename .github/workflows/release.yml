@@ -117,6 +117,13 @@ jobs:
 
       - run: npm ci
 
+      # Same placeholder as the desktop build: the bundle glob must resolve.
+      - name: Placeholder for the Soda signer
+        shell: bash
+        run: |
+          mkdir -p src-tauri/resources/qishui
+          touch src-tauri/resources/qishui/.keep
+
       - name: Build the APK
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
