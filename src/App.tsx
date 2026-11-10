@@ -64,6 +64,7 @@ export default function App() {
 
   const [view, setView] = useState<"playing" | "settings">("playing");
   const [source, setSource] = useState<MusicSource>(neteaseSource);
+  const [selectedId, setSelectedId] = useState("netease");
   const [track, setTrack] = useState<Track>(PLACEHOLDER);
   const [queue, setQueue] = useState<Track[]>([]);
   const [localCount, setLocalCount] = useState(0);
@@ -93,6 +94,7 @@ export default function App() {
       setReady(false);
       setTrack(next);
       setSource(from);
+      setSelectedId(from.id);
       setDuration(next.duration);
       setProblem(null);
       try {
@@ -306,6 +308,7 @@ export default function App() {
 
   const pickSource = useCallback(
     async (next: MusicSource) => {
+      setSelectedId(next.id);
       if (next.can("search")) {
         // Both of these only hand out audio to a signed-in listener; the QR
         // panel runs the same protocol the official apps do.
@@ -524,15 +527,15 @@ export default function App() {
               <path d="M17.5 9.5v8.2a1.9 1.9 0 1 1-1.6-1.9V7l4-1v3" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
-          {profiles[source.id] && (
+          {profiles[selectedId] && (
             <span className="meta__me">
-              {profiles[source.id].avatar && <img src={profiles[source.id].avatar} alt="" />}
-              <span>{profiles[source.id].name}</span>
+              {profiles[selectedId].avatar && <img src={profiles[selectedId].avatar} alt="" />}
+              <span>{profiles[selectedId].name}</span>
             </span>
           )}
           <SourceMenu
             sources={sources}
-            activeId={source.id}
+            activeId={selectedId}
             onPick={pickSource}
             onOpenFiles={openFiles}
             onSearch={() => setSearchSource(neteaseSource)}
