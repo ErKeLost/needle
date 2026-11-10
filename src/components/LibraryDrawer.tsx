@@ -88,16 +88,13 @@ export function LibraryDrawer({ open, cookie, sourceId, profile, onClose, onPlay
     setBusy(item.id);
     setError(null);
     try {
+      const isChart = (item.kind ?? "chart") === "chart";
       const command =
-        item.source === "qq"
-          ? item.kind === "chart"
-            ? "qq_chart"
-            : "qq_playlist"
-          : "netease_playlist";
+        item.source === "qq" ? (isChart ? "qq_chart" : "qq_playlist") : "netease_playlist";
       const answer = await invoke<{ name: string; tracks: Row[] }>(
         command,
         item.source === "qq"
-          ? item.kind === "chart"
+          ? isChart
             ? { id: String(item.id) }
             : { session: cookie, id: String(item.id) }
           : { cookie, id: String(item.id) },

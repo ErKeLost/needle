@@ -326,6 +326,7 @@ pub async fn qq_charts() -> Result<Value, String> {
                 "count": item.get("listenCount").and_then(Value::as_i64).unwrap_or(0),
                 "note": "QQ 音乐",
                 "source": "qq",
+                "kind": "chart",
             }))
         })
         .collect::<Vec<_>>();
@@ -585,4 +586,17 @@ pub async fn qq_playlist(session: String, id: String) -> Result<Value, String> {
         "name": answer.pointer("/req_0/data/dirinfo/title").and_then(Value::as_str).unwrap_or("QQ 歌单"),
         "tracks": tracks,
     }))
+}
+
+#[cfg(test)]
+mod chart_tests {
+    use super::*;
+
+    #[tokio::test]
+    #[ignore]
+    async fn a_chart_has_tracks() {
+        let answer = qq_chart("4".into()).await.unwrap();
+        let tracks = answer["tracks"].as_array().cloned().unwrap_or_default();
+        println!("chart={} tracks={} first={:?}", answer["name"], tracks.len(), tracks.first());
+    }
 }

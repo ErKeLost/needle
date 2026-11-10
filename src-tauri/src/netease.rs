@@ -769,6 +769,7 @@ pub async fn netease_charts() -> Result<Value, String> {
                 "count": item.get("trackCount").and_then(Value::as_i64).unwrap_or(0),
                 "note": item.get("updateFrequency").and_then(Value::as_str).unwrap_or(""),
                 "source": "netease",
+                "kind": "chart",
             }))
         })
         .collect::<Vec<_>>();
