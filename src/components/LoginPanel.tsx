@@ -31,10 +31,18 @@ export function LoginPanel({ service, onClose, onDone }: Props) {
             "netease_qr_poll",
             { key },
           );
-          if (answer.code === 803 && answer.cookie) {
+          if (answer.code === 803) {
+            if (!answer.cookie) {
+              setError("登录成功但没拿到 MUSIC_U，看看日志");
+              return;
+            }
             finished.current = true;
             setStatus("登录成功");
             onDone(answer.cookie);
+            return;
+          }
+          if (answer.code === 8821) {
+            setError("网易云判定当前网络环境有风险，改用网页登录");
             return;
           }
           if (answer.code === 802) setStatus("已扫码，请在手机上确认");
@@ -110,13 +118,9 @@ export function LoginPanel({ service, onClose, onDone }: Props) {
           });
           if (alive) setImage(data);
         } else {
-          const created = await invoke<{ qrcode: string }>("qq_qr_create");
-          const data = await QRCode.toDataURL(created.qrcode, {
-            margin: 1,
-            width: 232,
-            color: { dark: "#0b090b", light: "#f3ece3" },
-          });
-          if (alive) setImage(data);
+          const created = await invoke<{ png: number[] }>("qq_qr_create");
+          const blob = new Blob([new Uint8Array(created.png)], { type: "image/png" });
+          if (alive) setImage(URL.createObjectURL(blob));
         }
         if (alive) setStatus("等待扫码…");
         timer = window.setTimeout(poll, gap);
@@ -150,6 +154,23 @@ export function LoginPanel({ service, onClose, onDone }: Props) {
         <p className="login__hint">
           打开手机{NAME[service]} App，扫上面的码
         </p>
+
+        <button
+          type="button"
+          className="login__fallback"
+          onClick={async () => {
+            setError(null);
+            setStatus("请在打开的窗口里完成登录…");
+            try {
+              const cookie = await invoke<string>("open_login", { serviceName: service });
+              if (cookie) onDone(cookie);
+            } catch (problem) {
+              setError(typeof problem === "string" ? problem : "网页登录没有完成");
+            }
+          }}
+        >
+          改用网页登录
+        </button>
       </div>
     </div>
   );

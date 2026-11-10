@@ -39,6 +39,8 @@ export type Track = {
   kind: "notes" | "words";
   key?: string;
   bpm?: number;
+  /** QQ Music's media id, which is not always the songmid. */
+  mediaMid?: string;
   /** Album art, when the source has one. */
   artwork?: string;
   lines: StageLine[];

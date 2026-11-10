@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Props = {
   playing: boolean;
@@ -6,6 +6,7 @@ type Props = {
   onToggle: () => void;
   title: string;
   artwork?: string;
+  palette?: string[];
   spin: boolean;
 };
 
@@ -29,8 +30,24 @@ const ticks = Array.from({ length: 91 }, (_, i) => {
   };
 });
 
-export function RecordDeck({ playing, progress, onToggle, title, artwork, spin }: Props) {
+export function RecordDeck({ playing, progress, onToggle, title, artwork, palette, spin }: Props) {
   const dot = useMemo(() => polar(ARC_START + ARC_SWEEP * progress, 50.6), [progress]);
+
+  // Show the disc only once its photograph is decoded and its colours are
+  // known, so it cannot appear in three different states on the way in.
+  const [loaded, setLoaded] = useState(false);
+
+  // The pressing photograph is one file; decode it once, then every cover only
+  // changes the dye on top.
+  useEffect(() => {
+    const image = new Image();
+    const settle = () => setLoaded(true);
+    image.onload = settle;
+    image.src = "/vinyl.jpg";
+    if (image.complete) settle();
+  }, []);
+
+  const ready = loaded && (!artwork || Boolean(palette?.length));
 
   return (
     <div className="deck">
@@ -84,8 +101,16 @@ export function RecordDeck({ playing, progress, onToggle, title, artwork, spin }
         onClick={onToggle}
         aria-label={playing ? `Pause ${title}` : `Play ${title}`}
       >
-        <span className="disc">
+        <span className="disc" data-ready={ready}>
           <span className="disc__art" />
+          {palette && palette.length >= 3 && (
+            <span
+              className="disc__tint"
+              style={{
+                background: `conic-gradient(from 210deg at 50% 50%, ${palette[0]} 0deg, ${palette[0]} 150deg, ${palette[1]} 235deg, ${palette[2]} 320deg, ${palette[0]} 360deg)`,
+              }}
+            />
+          )}
           <span className="disc__grooves" />
           <span className="disc__edge" />
           <span

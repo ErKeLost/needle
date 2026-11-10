@@ -34,13 +34,15 @@ fn hash33(text: &str, seed: u32) -> u32 {
 /// The QR image bytes and the cookie that has to accompany the poll.
 #[tauri::command]
 pub async fn qq_qr_create() -> Result<Value, String> {
+    // The plain login code (a PNG), not QQ's quick-login page: scanning the
+    // latter sends the phone to a download page instead of a confirmation.
     let url = format!(
-        "https://ssl.ptlogin2.qq.com/ptqrshow?appid={APPID}&daid={DAID}&pt_3rd_aid={THIRD_AID}&u1={}&s=8&e=0&type=1&t={}",
-        urlencode("https://graph.qq.com/oauth2.0/login_jump"),
+        "https://ssl.ptlogin2.qq.com/ptqrshow?appid={APPID}&e=2&l=M&s=3&d=72&v=4&t={}&daid={DAID}&pt_3rd_aid={THIRD_AID}&u1={}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|time| time.as_nanos())
-            .unwrap_or(1)
+            .unwrap_or(1),
+        urlencode("https://graph.qq.com/oauth2.0/login_jump")
     );
     let response = client()?
         .get(&url)
@@ -56,31 +58,16 @@ pub async fn qq_qr_create() -> Result<Value, String> {
             qrsig = rest.split(';').next().unwrap_or("").to_string();
         }
     }
-    let body = response
-        .text()
+    let png = response
+        .bytes()
         .await
         .map_err(|error| format!("QQ 二维码读取失败：{error}"))?;
-    if qrsig.is_empty() {
-        return Err("QQ 没有下发 qrsig".into());
+    if qrsig.is_empty() || png.len() < 200 {
+        return Err("QQ 没有给出二维码".into());
     }
     *QRSIG.lock().unwrap() = Some(qrsig);
 
-    let payload = body
-        .trim()
-        .trim_start_matches("ptui_qrcode_CB(")
-        .trim_end_matches(");")
-        .trim_end_matches(')');
-    let parsed: Value = serde_json::from_str(payload)
-        .map_err(|error| format!("QQ 二维码内容无法解析：{error}"))?;
-    let qrcode = parsed.get("qrcode").and_then(Value::as_str).unwrap_or("");
-    if qrcode.is_empty() {
-        return Err(parsed
-            .get("em")
-            .and_then(Value::as_str)
-            .unwrap_or("QQ 没有给出二维码")
-            .to_string());
-    }
-    Ok(json!({ "qrcode": qrcode }))
+    Ok(json!({ "png": png.to_vec() }))
 }
 
 /// 65 waiting, 66 scanned, 67 cancelled, 0 done (the url is the check_sig).
@@ -224,6 +211,11 @@ pub async fn qq_qr_exchange(url: String) -> Result<Value, String> {
     }
 
     let p_skey = jar.get("p_skey").cloned().unwrap_or_default();
+    qq_log(&format!(
+        "check_sig cookies={:?} p_skey={}",
+        jar.keys().collect::<Vec<_>>(),
+        if p_skey.is_empty() { "none" } else { "ok" }
+    ));
     if p_skey.is_empty() {
         return Err("QQ 没有下发 p_skey".into());
     }
@@ -263,6 +255,7 @@ pub async fn qq_qr_exchange(url: String) -> Result<Value, String> {
         .unwrap_or("")
         .to_string();
     let code = query_of(&location, "code");
+    qq_log(&format!("authorize location={} code={}", location, if code.is_empty() { "none" } else { "ok" }));
     if code.is_empty() {
         return Err("QQ 授权没有返回 code".into());
     }
@@ -308,16 +301,44 @@ pub async fn qq_qr_exchange(url: String) -> Result<Value, String> {
         .and_then(Value::as_str)
         .unwrap_or("")
         .to_string();
+    qq_log(&format!(
+        "login musicid={} musickey={} answer={}",
+        musicid,
+        if musickey.is_empty() { "none" } else { "ok" },
+        answer.to_string().chars().take(300).collect::<String>()
+    ));
     if musicid.is_empty() || musickey.is_empty() {
         return Err("QQ 登录没有拿到 musickey".into());
     }
     let name = data.get("nick").and_then(Value::as_str).unwrap_or("QQ 音乐");
+    let login_type = if musickey.starts_with("W_X") { 1 } else { 2 };
 
+    // What playback needs is the pair, exactly like the plugin's session.
+    let session = json!({
+        "musicid": musicid,
+        "musickey": musickey,
+        "loginType": login_type,
+        "name": name,
+    });
     Ok(json!({
-        "cookie": format!("uin=o{musicid}; qm_keystones={musickey}; qqmusic_key={musickey}"),
+        "cookie": session.to_string(),
         "name": name,
         "musicid": musicid,
     }))
+}
+
+fn qq_log(line: &str) {
+    let home = std::env::var("HOME").unwrap_or_default();
+    let dir = std::path::PathBuf::from(home).join("Library/Application Support/app.needle.player");
+    let _ = std::fs::create_dir_all(&dir);
+    use std::io::Write;
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(dir.join("qq-login.log"))
+    {
+        let _ = writeln!(file, "{line}");
+    }
 }
 
 fn device_id() -> String {
@@ -328,6 +349,69 @@ fn device_id() -> String {
     format!("{value:010}")
 }
 
+#[tauri::command]
+pub async fn qq_profile(app: tauri::AppHandle, cookie: String) -> Result<Value, String> {
+    let session: Value = serde_json::from_str(&cookie).unwrap_or(Value::Null);
+    let uin = session
+        .get("musicid")
+        .map(|value| value.to_string().trim_matches('"').to_string())
+        .or_else(|| {
+            cookie.split(';').find_map(|part| {
+                let (key, value) = part.trim().split_once('=')?;
+                (key == "uin").then(|| value.trim_start_matches('o').to_string())
+            })
+        })
+        .ok_or_else(|| "登录信息里没有 uin".to_string())?;
+    let key = session.get("musickey").and_then(Value::as_str).unwrap_or("");
+    let name = session.get("name").and_then(Value::as_str).unwrap_or("");
+
+    // cgi() in the plugin: the same cookie as playback, plus a g_tk.
+    let mut url = format!(
+        "https://c.y.qq.com/rsc/fcgi-bin/fcg_get_profile_homepage.fcg?format=json&cid=205360838&userid={uin}&reqfrom=1"
+    );
+    if !key.is_empty() {
+        url.push_str(&format!("&g_tk={}", hash33(key, 5381)));
+    }
+    let mut request = reqwest::Client::builder()
+        .user_agent(UA)
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|error| error.to_string())?
+        .get(url)
+        .header("Referer", "https://y.qq.com/");
+    if !key.is_empty() {
+        request = request.header(
+            "Cookie",
+            format!("uin=o{uin}; qm_keystones={key}; qqmusic_key={key}"),
+        );
+    }
+    let body: Value = request
+        .send()
+        .await
+        .map_err(|error| format!("QQ 连不上：{error}"))?
+        .json()
+        .await
+        .map_err(|error| format!("QQ 返回了无效数据：{error}"))?;
+
+    qq_log(&format!("profile body={}", body.to_string().chars().take(200).collect::<String>()));
+
+    let creator = body.pointer("/data/creator").cloned().unwrap_or(Value::Null);
+    let nickname = creator
+        .get("nick")
+        .or_else(|| creator.get("name"))
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(name);
+
+    // QQ often refuses this CGI (code 1000) while the music session is still
+    // valid; the MyGo plugin then falls back to the name it got at sign-in.
+    let display = if nickname.is_empty() { "QQ 音乐" } else { nickname };
+    Ok(json!({
+        "name": display,
+        "avatar": creator.get("headpic").and_then(Value::as_str).unwrap_or(""),
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -336,7 +420,7 @@ mod tests {
     #[ignore]
     async fn creates_and_polls_a_qr() {
         let created = qq_qr_create().await.unwrap();
-        assert!(created["qrcode"].as_str().map(|text| text.starts_with("http")).unwrap_or(false));
+        assert!(created["png"].as_array().map(|bytes| bytes.len() > 200).unwrap_or(false));
         let status = qq_qr_poll().await.unwrap();
         assert!(matches!(status["code"].as_str().unwrap_or(""), "65" | "66" | "67" | "0"));
     }

@@ -194,64 +194,9 @@ button {
   }
 }
 
-.disc__art {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background-image: url("/vinyl.jpg");
-  background-size: cover;
-  background-position: 50% 50%;
-  transform: scale(1.03);
-  filter: saturate(0.98) brightness(0.88) contrast(1.06);
-}
 
-.disc__grooves {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: repeating-radial-gradient(
-    circle at 50% 50%,
-    rgba(255, 255, 255, 0.055) 0 1px,
-    rgba(0, 0, 0, 0.12) 1px 3px
-  );
-  mix-blend-mode: overlay;
-  opacity: 0.55;
-}
 
-.disc__edge {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: radial-gradient(
-    circle at 50% 50%,
-    rgba(0, 0, 0, 0) 72%,
-    rgba(0, 0, 0, 0.4) 90%,
-    rgba(0, 0, 0, 0.78) 100%
-  );
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.14),
-    inset 0 0 6vh rgba(0, 0, 0, 0.35);
-}
 
-.disc__light {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  pointer-events: none;
-  background:
-    radial-gradient(130% 100% at 6% 0%, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0) 45%),
-    conic-gradient(
-      from 208deg at 50% 50%,
-      rgba(255, 255, 255, 0) 0deg,
-      rgba(255, 255, 255, 0.11) 20deg,
-      rgba(255, 255, 255, 0) 46deg,
-      rgba(255, 255, 255, 0) 150deg,
-      rgba(255, 255, 255, 0.06) 176deg,
-      rgba(255, 255, 255, 0) 208deg
-    );
-  mix-blend-mode: screen;
-  z-index: 3;
-}
 
 .disc__label {
   position: absolute;
@@ -533,89 +478,8 @@ button {
   margin-top: 18px;
 }
 
-.source__button {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 4px 0;
-  border: 0;
-  background: none;
-  font-family: var(--mono);
-  font-size: 10.5px;
-  color: var(--paper-46);
-  cursor: pointer;
-  transition: color 140ms linear;
-}
-
-.source__button:hover {
-  color: var(--paper-72);
-}
-
-.source__chevron {
-  opacity: 0.7;
-  transition: transform 160ms var(--ease);
-}
-
 .source__chevron.is-open {
   transform: rotate(180deg);
-}
-
-.source__menu {
-  position: absolute;
-  top: 28px;
-  right: 0;
-  width: 244px;
-  padding: 6px;
-  border: 1px solid var(--hairline);
-  border-radius: 12px;
-  background: var(--ink-menu);
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.6);
-  z-index: 30;
-  text-align: left;
-}
-
-.source__item {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: baseline;
-  gap: 10px;
-  width: 100%;
-  padding: 9px 10px;
-  border: 0;
-  border-radius: 8px;
-  background: none;
-  color: var(--paper-72);
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-  transition: background-color 120ms linear, color 120ms linear;
-}
-
-.source__item:hover {
-  background: rgba(243, 236, 227, 0.06);
-  color: var(--paper);
-}
-
-.source__item em {
-  font-family: var(--mono);
-  font-style: normal;
-  font-size: 10px;
-  color: var(--paper-30);
-  white-space: nowrap;
-}
-
-.source__item[aria-checked="true"] span {
-  color: var(--paper);
-}
-
-.source__item[aria-checked="true"] em {
-  color: var(--ember);
-}
-
-.source__divider {
-  height: 1px;
-  margin: 6px 8px;
-  background: var(--hairline);
 }
 
 /* -------------------------------------------------------------------- lane */
@@ -752,17 +616,6 @@ button {
   background: var(--pill-violet);
 }
 
-.cue {
-  position: absolute;
-  right: -0.44em;
-  top: -0.52em;
-  width: 7px;
-  height: 7px;
-  border-radius: 1px;
-  background: var(--cue);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
-}
-
 .lane--empty {
   display: flex;
   flex-direction: column;
@@ -783,85 +636,8 @@ button {
   color: var(--paper-30);
 }
 
-/* ------------------------------------------------------------------ footer */
-
-.transport {
-  display: none;
-  position: absolute;
-  left: 50%;
-  bottom: 72px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  transform: translateX(-50%);
-  z-index: 6;
-}
-
-.control {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: none;
-  color: var(--paper-46);
-  cursor: pointer;
-  transition: color 150ms linear, background-color 150ms linear, border-color 150ms linear;
-}
-
-.control:hover {
-  color: var(--paper);
-  background: rgba(243, 236, 227, 0.06);
-}
-
-.control--play {
-  width: 48px;
-  height: 48px;
-  margin: 0 4px;
-  border: 1px solid rgba(243, 236, 227, 0.22);
-  color: var(--paper);
-}
-
-.control--play:hover {
-  background: rgba(243, 236, 227, 0.08);
-  border-color: rgba(243, 236, 227, 0.36);
-}
-
-.control--play:disabled {
-  cursor: default;
-  color: var(--paper-30);
-  border-color: var(--hairline);
-  background: none;
-}
-
-.clock {
-  display: none;
-  position: absolute;
-  right: 40px;
-  bottom: 78px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-family: var(--mono);
-  font-size: 11.5px;
-  color: var(--paper-30);
-  font-variant-numeric: tabular-nums;
-  z-index: 6;
-}
-
 .clock__elapsed {
   color: var(--paper-72);
-}
-
-.scrub {
-  display: flex;
-  align-items: center;
-  width: 132px;
-  height: 20px;
-  cursor: pointer;
-  touch-action: none;
 }
 
 .scrub__rail {
@@ -1342,48 +1118,6 @@ button {
   cursor: default;
 }
 
-.switch {
-  position: relative;
-  width: 36px;
-  height: 20px;
-  flex: none;
-  padding: 0;
-  border: 1px solid rgba(243, 236, 227, 0.18);
-  border-radius: 10px;
-  background: transparent;
-  cursor: pointer;
-  transition: background-color 160ms linear, border-color 160ms linear;
-}
-
-.switch__knob {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 12px;
-  height: 12px;
-  border-radius: 6px;
-  background: var(--paper-46);
-  transition: transform 180ms var(--ease), background-color 160ms linear;
-}
-
-.switch[aria-checked="true"] {
-  background: rgba(243, 236, 227, 0.9);
-  border-color: rgba(243, 236, 227, 0.9);
-}
-
-.switch[aria-checked="true"] .switch__knob {
-  background: #0b090b;
-  transform: translateX(16px);
-}
-
-.segmented {
-  display: flex;
-  padding: 2px;
-  gap: 2px;
-  border: 1px solid var(--hairline);
-  border-radius: 8px;
-}
-
 .segmented__item {
   padding: 4px 9px;
   border: 0;
@@ -1654,19 +1388,6 @@ kbd {
 .account__error {
   font-size: 11px;
   color: #ff9a80;
-}
-
-/* ------------------------------------------------------------------- dock */
-
-.dock {
-  position: absolute;
-  left: 41%;
-  right: 5.5%;
-  bottom: 22px;
-  z-index: 6;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
 }
 
 .dock__line {
@@ -2042,17 +1763,6 @@ kbd {
   box-shadow: none;
 }
 
-.word-underline {
-  position: absolute;
-  left: 0.02em;
-  right: 0.02em;
-  bottom: -0.02em;
-  height: 2px;
-  border-radius: 2px;
-  background: var(--ember);
-  transform-origin: left center;
-}
-
 /* Every line starts on the same left edge, whatever its scale. */
 .lane__row {
   transform-origin: left center;
@@ -2113,10 +1823,6 @@ kbd {
 .lane__tokens {
   min-width: 0;
   width: 100%;
-}
-
-.word-underline {
-  display: none;
 }
 
 /* A slower, softer sweep; a single band reads smoother than a hard gradient. */
@@ -2535,10 +2241,6 @@ kbd {
   }
 }
 
-.shimmer {
-  display: none;
-}
-
 /* Failures surface as a quiet toast at the top, never over the lyrics. */
 .notice,
 .notice--problem {
@@ -2753,4 +2455,523 @@ kbd {
   transform: scale(3.4);
   transform-origin: center;
   opacity: 0.95;
+}
+
+.bar__cover {
+  box-shadow: none;
+  background: transparent;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.meta__me {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--paper-46);
+  max-width: 200px;
+}
+
+.meta__me span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta__me img {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.login__fallback {
+  margin-top: 12px;
+  border: 0;
+  background: none;
+  color: var(--paper-30);
+  font-size: 11px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.login__fallback:hover {
+  color: var(--paper-72);
+}
+
+/* A little more presence for the source mark. */
+.source__brand {
+  flex: none;
+}
+
+.meta .button {
+  min-height: 38px;
+}
+
+/* The cover's colours, pressed into the marbling: hue and saturation come
+   from the tint, the grooves and light stay from the photograph. */
+
+/* Tighter lines, and less work per frame: no live blend mode over a rotating
+   disc, no blur on the two nearest rows. */
+.lane__row {
+  margin-top: -20px;
+  filter: blur(2.6px);
+  transform: translateZ(0);
+}
+
+.lane__row[data-distance="1"] {
+  filter: blur(0.8px);
+}
+
+.lane__row[data-distance="0"] {
+  filter: none;
+}
+
+
+
+/* Back to the tint that looked right: a colour wash over the photograph,
+   static in the platter so its gradient does not spin with the disc. */
+
+
+/* Vinyl, not paint: the photograph keeps its light, the cover only tints it,
+   and the grooves and specular arc are lifted so the surface reads as pressed. */
+
+
+
+/* A broad specular sweep plus one hot edge, the way a softbox reads on a
+   black disc. */
+
+
+/* The tint now carries a lifted hue, so it can be strong without hiding the
+   grooves underneath. */
+
+/* A coloured pressing: soft pours of the cover's colours over black, with the
+   grooves and one specular sweep on top. No flat wash. */
+
+
+
+/* The record stays a photograph; the album colour shows in the chrome. */
+.halo__arc {
+  stroke: var(--album-a, var(--ember));
+  transition: stroke 500ms linear;
+}
+
+.halo__dot {
+  fill: var(--album-a, var(--ember));
+  transition: fill 500ms linear;
+}
+
+.halo__arc-track {
+  stroke: color-mix(in srgb, var(--album-a, var(--ember)) 22%, transparent);
+}
+
+.player::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(48% 46% at 22% 44%, color-mix(in srgb, var(--album-a, var(--ember)) 30%, transparent) 0%, transparent 70%);
+  opacity: 0.55;
+  transition: background 600ms linear;
+}
+
+/* The pressing follows the cover: the photograph loses its own colour and
+   becomes pure marbling, then the album's gradient dyes it. */
+
+
+/* Vinyl is mostly black with colour in it, never a light plate. Darken the
+   marbling first, then let the album hue sit on top of that darkness. */
+
+
+
+
+/* Tuned on a render: a black pressing with the album's colour in the
+   marbling, a soft gloss, and grooves you can just see. */
+
+
+
+
+/* ------------------------------------------------------------------ record
+   Final, single definition. Photo → grey and dark → the album's gradient dyes
+   it → grooves → edge → gloss. */
+.disc__art {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background-image: url("/vinyl.jpg");
+  background-size: cover;
+  background-position: 50% 50%;
+  filter: grayscale(1) brightness(0.42) contrast(1.45);
+}
+
+.disc__tint {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  mix-blend-mode: color;
+  opacity: 0.95;
+  pointer-events: none;
+  animation: tint-in 420ms var(--ease);
+}
+
+.disc__grooves {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: repeating-radial-gradient(
+    circle at 50% 50%,
+    rgba(255, 255, 255, 0.1) 0 1px,
+    rgba(0, 0, 0, 0.22) 1px 2.4px
+  );
+  mix-blend-mode: overlay;
+  opacity: 0.6;
+}
+
+.disc__edge {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(0, 0, 0, 0) 66%,
+    rgba(0, 0, 0, 0.3) 86%,
+    rgba(0, 0, 0, 0.76) 96%,
+    rgba(0, 0, 0, 0.92) 100%
+  );
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.2),
+    inset 0 0 0 2px rgba(0, 0, 0, 0.55);
+}
+
+.disc__light {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 120% at 6% -8%, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0) 42%),
+    conic-gradient(
+      from 196deg at 50% 50%,
+      rgba(255, 255, 255, 0) 0deg,
+      rgba(255, 255, 255, 0.14) 16deg,
+      rgba(255, 255, 255, 0.02) 38deg,
+      rgba(255, 255, 255, 0) 56deg,
+      rgba(255, 255, 255, 0) 150deg,
+      rgba(255, 255, 255, 0.08) 176deg,
+      rgba(255, 255, 255, 0) 206deg
+    );
+  mix-blend-mode: screen;
+  opacity: 0.9;
+  z-index: 3;
+}
+
+@keyframes tint-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ------------------------------------------------------------------ drawer */
+
+.drawer__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  border: 0;
+  padding: 0;
+  background: rgba(4, 3, 5, 0.45);
+  cursor: default;
+}
+
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 56;
+  width: 344px;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--hairline);
+  background: var(--ink-menu);
+  box-shadow: -20px 0 60px rgba(0, 0, 0, 0.5);
+}
+
+.drawer__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 22px 18px 14px;
+}
+
+.drawer__who {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--paper-72);
+  min-width: 0;
+}
+
+.drawer__who span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drawer__who img {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.drawer__close {
+  border: 0;
+  background: none;
+  color: var(--paper-30);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.drawer__note,
+.drawer__error {
+  margin: 0;
+  padding: 10px 18px 16px;
+  font-size: 12px;
+  color: var(--paper-30);
+}
+
+.drawer__error {
+  color: #ff9a80;
+}
+
+.drawer__list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 8px 18px;
+}
+
+.shelf {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms linear;
+}
+
+.shelf:hover {
+  background: rgba(243, 236, 227, 0.05);
+}
+
+.shelf[data-busy="true"] {
+  opacity: 0.5;
+}
+
+.shelf__cover {
+  width: 42px;
+  height: 42px;
+  flex: none;
+  border-radius: 5px;
+  overflow: hidden;
+  background: #201a20;
+}
+
+.shelf__cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.shelf__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.shelf__name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--paper-72);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shelf__heart {
+  color: var(--ember);
+  font-size: 11px;
+}
+
+.shelf__meta {
+  font-size: 11px;
+  color: var(--paper-30);
+}
+
+.library-open {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--paper-46);
+  cursor: pointer;
+  transition: color 140ms linear, background-color 140ms linear;
+}
+
+.library-open:hover {
+  color: var(--paper-72);
+  background: rgba(243, 236, 227, 0.06);
+}
+
+.drawer__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: none;
+  color: var(--paper-72);
+  font-size: 13px;
+  cursor: pointer;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.song {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms linear;
+}
+
+.song:hover {
+  background: rgba(243, 236, 227, 0.05);
+}
+
+.song__index {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--paper-30);
+}
+
+.song__text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.song__name {
+  font-size: 12.5px;
+  color: var(--paper-72);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.song:hover .song__name {
+  color: var(--paper);
+}
+
+.song__meta {
+  font-size: 11px;
+  color: var(--paper-30);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.song__time {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--paper-30);
+}
+
+/* Nothing half-loaded: the platter fades in once the photo and palette are in. */
+.disc {
+  opacity: 0;
+  transition: opacity 260ms var(--ease);
+}
+
+.disc[data-ready="true"] {
+  opacity: 1;
+}
+
+/* One fade in, no second transition once the dye is on. */
+.disc__tint {
+  animation: none;
+}
+
+.drawer__section {
+  margin: 14px 10px 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--paper-30);
+}
+
+/* The platter never stops turning; only the arm lifts. */
+.arm {
+  transform: rotate(-11.5deg);
+  transition: transform 720ms cubic-bezier(0.34, 1.4, 0.5, 1);
+}
+
+.arm[data-lifted="true"] {
+  transform: rotate(-22deg) translateY(-0.6vh);
+}
+
+/* The platter turns only while the side plays; the arm takes its time. */
+.arm {
+  transition: transform 1150ms cubic-bezier(0.32, 0.02, 0.2, 1);
+}
+
+.arm[data-lifted="true"] {
+  transform: rotate(-24deg) translateY(-0.8vh);
+}
+
+.meta__signin {
+  border: 0;
+  background: none;
+  padding: 4px 2px;
+  font-size: 11px;
+  color: var(--paper-30);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.meta__signin:hover {
+  color: var(--paper-72);
 }

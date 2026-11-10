@@ -183,6 +183,21 @@ pub async fn netease_search(query: String, limit: Option<u32>) -> Result<Value, 
     Ok(json!({ "tracks": tracks }))
 }
 
+/// The signed entry point MyGo's NetEase plugin uses for the QR login: the
+/// client profile is what keeps 8821 ("risky environment") away.
+pub(crate) async fn eapi_login(path: &str, params: Value) -> Result<Value, String> {
+    eapi(path, params, None).await
+}
+
+/// A cookie the jar has picked up, by name.
+pub(crate) fn jar_cookie(name: &str) -> Option<String> {
+    let store = jar().lock().unwrap();
+    store
+        .iter()
+        .find(|(key, value)| key == name && !value.is_empty())
+        .map(|(_, value)| value.clone())
+}
+
 /// The hot chart, the way the app opens on something that is actually
 /// pressed and shipping this week.
 #[tauri::command]
@@ -404,6 +419,20 @@ fn cache_directory(app: &AppHandle) -> Result<PathBuf, String> {
 /// One `eapi` call: the path and the JSON body are joined with a fixed
 /// separator, hashed, AES-ECB encrypted and posted as `params`.
 async fn eapi(path: &str, params: Value, cookie_in: Option<&str>) -> Result<Value, String> {
+    eapi_with(path, params, cookie_in, &[200]).await
+}
+
+/// Login answers 800/801/802/803 as ordinary states, not failures.
+pub(crate) async fn eapi_login_poll(path: &str, params: Value) -> Result<Value, String> {
+    eapi_with(path, params, None, &[800, 801, 802, 803]).await
+}
+
+async fn eapi_with(
+    path: &str,
+    params: Value,
+    cookie_in: Option<&str>,
+    allowed: &[i64],
+) -> Result<Value, String> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|error| error.to_string())?
@@ -496,7 +525,7 @@ async fn eapi(path: &str, params: Value, cookie_in: Option<&str>) -> Result<Valu
             .get("code")
             .and_then(Value::as_i64)
             .unwrap_or(status.as_u16() as i64);
-        if code == 200 {
+        if allowed.contains(&code) {
             return Ok(answer);
         }
         if code == -460 && attempt < 2 {
@@ -563,4 +592,187 @@ fn device_id() -> String {
     );
     let digest = format!("{:x}", Md5::digest(seed.as_bytes())).to_uppercase();
     digest.repeat(2).chars().take(52).collect()
+}
+
+/// The listener's own shelves: the playlists they made, the ones they saved,
+/// and the liked songs, which NetEase keeps as a playlist of its own.
+#[tauri::command]
+pub async fn netease_library(cookie: String) -> Result<Value, String> {
+    let http = client()?;
+    let account: Value = http
+        .get(format!("{SITE}/api/nuser/account/get"))
+        .header("Referer", referer())
+        .header("Cookie", &cookie)
+        .send()
+        .await
+        .map_err(|error| format!("网易云连不上：{error}"))?
+        .json()
+        .await
+        .map_err(|error| format!("网易云返回了无效数据：{error}"))?;
+
+    let uid = account
+        .pointer("/profile/userId")
+        .map(|value| value.to_string().trim_matches('"').to_string())
+        .unwrap_or_default();
+    if uid.is_empty() {
+        return Err("登录已失效，重新扫一次码".into());
+    }
+
+    let body: Value = http
+        .get(format!("{SITE}/api/user/playlist"))
+        .query(&[("uid", uid.as_str()), ("limit", "100"), ("offset", "0")])
+        .header("Referer", referer())
+        .header("Cookie", &cookie)
+        .send()
+        .await
+        .map_err(|error| format!("网易云连不上：{error}"))?
+        .json()
+        .await
+        .map_err(|error| format!("网易云返回了无效数据：{error}"))?;
+
+    let playlists = body
+        .get("playlist")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|item| {
+            let id = item.get("id")?.as_i64()?;
+            let creator = item
+                .pointer("/creator/userId")
+                .map(|value| value.to_string().trim_matches('"').to_string())
+                .unwrap_or_default();
+            let special = item.get("specialType").and_then(Value::as_i64).unwrap_or(0);
+            Some(json!({
+                "id": id,
+                "name": item.get("name").and_then(Value::as_str).unwrap_or(""),
+                "cover": item.get("coverImgUrl").and_then(Value::as_str).unwrap_or(""),
+                "count": item.get("trackCount").and_then(Value::as_i64).unwrap_or(0),
+                "mine": creator == uid,
+                "liked": special == 5,
+            }))
+        })
+        .collect::<Vec<_>>();
+
+    Ok(json!({
+        "user": {
+            "id": uid,
+            "name": account.pointer("/profile/nickname").and_then(Value::as_str).unwrap_or(""),
+            "avatar": account.pointer("/profile/avatarUrl").and_then(Value::as_str).unwrap_or(""),
+        },
+        "playlists": playlists,
+    }))
+}
+
+/// One shelf, as tracks the player can queue. The order is `trackIds`; the
+/// songs come from `/api/v3/song/detail` in batches, as the MyGo plugin does.
+#[tauri::command]
+pub async fn netease_playlist(cookie: String, id: String) -> Result<Value, String> {
+    let http = client()?;
+    let detail: Value = http
+        .get(format!("{SITE}/api/v6/playlist/detail"))
+        .query(&[("id", id.as_str()), ("n", "1000")])
+        .header("Referer", referer())
+        .header("Cookie", &cookie)
+        .send()
+        .await
+        .map_err(|error| format!("网易云连不上：{error}"))?
+        .json()
+        .await
+        .map_err(|error| format!("网易云返回了无效数据：{error}"))?;
+
+    if detail.get("playlist").is_none() {
+        return Err("歌单不存在或当前账号无权访问".into());
+    }
+    let name = detail
+        .pointer("/playlist/name")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+
+    let ids: Vec<i64> = detail
+        .pointer("/playlist/trackIds")
+        .and_then(Value::as_array)
+        .map(|list| {
+            list.iter()
+                .filter_map(|item| item.get("id").and_then(Value::as_i64))
+                .take(1000)
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let mut songs: Vec<Value> = Vec::new();
+    for batch in ids.chunks(100) {
+        let c = json!(batch.iter().map(|id| json!({ "id": id })).collect::<Vec<_>>()).to_string();
+        let body = eapi("/api/v3/song/detail", json!({ "c": c }), Some(&cookie)).await?;
+        if let Some(list) = body.get("songs").and_then(Value::as_array) {
+            songs.extend(list.iter().cloned());
+        }
+    }
+
+    let tracks = songs
+        .iter()
+        .filter_map(|song| {
+            let id = song.get("id")?.as_i64()?;
+            let artists = song
+                .get("ar")
+                .or_else(|| song.get("artists"))
+                .and_then(Value::as_array)
+                .map(|list| {
+                    list.iter()
+                        .filter_map(|artist| artist.get("name").and_then(Value::as_str))
+                        .collect::<Vec<_>>()
+                        .join(" / ")
+                })
+                .unwrap_or_default();
+            let album = song.get("al").or_else(|| song.get("album")).cloned().unwrap_or(Value::Null);
+            Some(json!({
+                "id": id,
+                "name": song.get("name").and_then(Value::as_str).unwrap_or(""),
+                "artist": artists,
+                "album": text_of(&album, "/name"),
+                "cover": text_of(&album, "/picUrl"),
+                "duration": song.get("dt").or_else(|| song.get("duration")).and_then(Value::as_i64).unwrap_or(0),
+            }))
+        })
+        .collect::<Vec<_>>();
+
+    Ok(json!({ "name": name, "tracks": tracks }))
+}
+
+/// The charts NetEase publishes; each is a playlist, so the shelf loader can
+/// open any of them.
+#[tauri::command]
+pub async fn netease_charts() -> Result<Value, String> {
+    let body: Value = client()?
+        .get(format!("{SITE}/api/toplist/detail"))
+        .header("Referer", referer())
+        .send()
+        .await
+        .map_err(|error| format!("网易云连不上：{error}"))?
+        .json()
+        .await
+        .map_err(|error| format!("网易云返回了无效数据：{error}"))?;
+
+    let charts = body
+        .get("list")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|item| {
+            let id = item.get("id")?.as_i64()?;
+            Some(json!({
+                "id": id,
+                "name": item.get("name").and_then(Value::as_str).unwrap_or(""),
+                "cover": item.get("coverImgUrl").and_then(Value::as_str).unwrap_or(""),
+                "count": item.get("trackCount").and_then(Value::as_i64).unwrap_or(0),
+                "note": item.get("updateFrequency").and_then(Value::as_str).unwrap_or(""),
+                "source": "netease",
+                "kind": "chart",
+            }))
+        })
+        .collect::<Vec<_>>();
+
+    Ok(json!({ "charts": charts }))
 }

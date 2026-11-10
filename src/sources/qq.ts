@@ -17,6 +17,7 @@ type Hit = {
   cover: string;
   duration: number;
   pay?: number;
+  media?: string;
 };
 
 type LyricAnswer = { lrc: string; translation: string };
@@ -28,6 +29,7 @@ export function qqTrack(hit: Hit): Track {
     artist: hit.artist || "QQ 音乐",
     album: hit.album,
     duration: (hit.duration || 0) / 1000,
+    mediaMid: hit.media,
     kind: "words",
     lines: [],
     artwork: hit.cover || undefined,
@@ -52,6 +54,7 @@ async function devSearch(query: string): Promise<Hit[]> {
       : "",
     duration: (song.interval ?? 0) * 1000,
     pay: song.pay?.payplay ?? 0,
+    media: song.file?.media_mid || song.media_mid || song.songmid,
   }));
 }
 
@@ -94,8 +97,9 @@ export const qqSource: MusicSource = {
   async stream(track, options) {
     if (!inTauri()) throw new Error("QQ 音乐播放需要桌面版");
     const answer = await invoke<{ path: string; kind: string }>("qq_stream", {
-      id: track.id,
-      cookie: options?.cookie ?? null,
+      id: track.id.replace(/^qq-/, ""),
+      media: track.mediaMid ?? null,
+      session: options?.cookie ?? null,
     });
     return {
       audio: { kind: "url", url: convertFileSrc(answer.path) },

@@ -336,3 +336,50 @@ mod tests {
         assert!(answer["qrcode"].as_str().unwrap().starts_with("http"));
     }
 }
+
+/// Who the passport cookie belongs to. `my_info` and `user` are both used by
+/// the desktop client, depending on the endpoint version.
+#[tauri::command]
+pub async fn qishui_profile(cookie: String) -> Result<Value, String> {
+    let query = format!(
+        "aid=386088&app_name=luna_pc&region=cn&geo_region=cn&os_region=cn&device_platform=mac&device_type=Mac&os_version=darwin&version_name=3.7.0&version_code=30070000&channel=official&build_mode=master"
+    );
+    let body: Value = client()?
+        .get(format!("{API}/luna/pc/me?{query}"))
+        .header("Accept", "application/json")
+        .header("User-Agent", "LunaPC/3.7.0(452316191)")
+        .header("Cookie", cookie)
+        .send()
+        .await
+        .map_err(|error| format!("汽水连不上：{error}"))?
+        .json()
+        .await
+        .map_err(|error| format!("汽水返回了无效数据：{error}"))?;
+
+    let person = body
+        .get("my_info")
+        .or_else(|| body.get("user"))
+        .cloned()
+        .unwrap_or(Value::Null);
+    let name = person
+        .get("nickname")
+        .or_else(|| person.get("public_name"))
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    if name.is_empty() {
+        return Err("汽水没有返回账号信息".into());
+    }
+    let avatar = person
+        .get("avatar")
+        .and_then(|avatar| {
+            avatar
+                .get("urls")
+                .and_then(Value::as_array)
+                .and_then(|urls| urls.first())
+                .and_then(Value::as_str)
+                .map(str::to_string)
+                .or_else(|| avatar.as_str().map(str::to_string))
+        })
+        .unwrap_or_default();
+    Ok(json!({ "name": name, "avatar": avatar }))
+}
