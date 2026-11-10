@@ -2934,3 +2934,10 @@ kbd {
 .disc__tint {
   animation: none;
 }
+
+.drawer__section {
+  margin: 14px 10px 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--paper-30);
+}

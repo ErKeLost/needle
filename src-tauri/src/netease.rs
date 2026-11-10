@@ -739,3 +739,39 @@ pub async fn netease_playlist(cookie: String, id: String) -> Result<Value, Strin
 
     Ok(json!({ "name": name, "tracks": tracks }))
 }
+
+/// The charts NetEase publishes; each is a playlist, so the shelf loader can
+/// open any of them.
+#[tauri::command]
+pub async fn netease_charts() -> Result<Value, String> {
+    let body: Value = client()?
+        .get(format!("{SITE}/api/toplist/detail"))
+        .header("Referer", referer())
+        .send()
+        .await
+        .map_err(|error| format!("网易云连不上：{error}"))?
+        .json()
+        .await
+        .map_err(|error| format!("网易云返回了无效数据：{error}"))?;
+
+    let charts = body
+        .get("list")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|item| {
+            let id = item.get("id")?.as_i64()?;
+            Some(json!({
+                "id": id,
+                "name": item.get("name").and_then(Value::as_str).unwrap_or(""),
+                "cover": item.get("coverImgUrl").and_then(Value::as_str).unwrap_or(""),
+                "count": item.get("trackCount").and_then(Value::as_i64).unwrap_or(0),
+                "note": item.get("updateFrequency").and_then(Value::as_str).unwrap_or(""),
+                "source": "netease",
+            }))
+        })
+        .collect::<Vec<_>>();
+
+    Ok(json!({ "charts": charts }))
+}

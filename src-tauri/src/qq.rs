@@ -287,3 +287,113 @@ fn cache_file(app: &AppHandle, mid: &str, kind: &str) -> Result<std::path::PathB
     std::fs::create_dir_all(&directory).map_err(|error| format!("无法建立缓存目录：{error}"))?;
     Ok(directory.join(format!("qq-{mid}.{kind}")))
 }
+
+/// The QQ Music charts, and one of them as queueable tracks.
+#[tauri::command]
+pub async fn qq_charts() -> Result<Value, String> {
+    let body: Value = client()?
+        .get("https://c.y.qq.com/v8/fcg-bin/fcg_myqq_toplist.fcg")
+        .query(&[
+            ("format", "json"),
+            ("g_tk", "5381"),
+            ("uin", "0"),
+            ("inCharset", "utf-8"),
+            ("outCharset", "utf-8"),
+            ("notice", "0"),
+            ("platform", "h5"),
+            ("needNewCode", "1"),
+        ])
+        .header("Referer", YQQ)
+        .send()
+        .await
+        .map_err(|error| format!("QQ 音乐连不上：{error}"))?
+        .json()
+        .await
+        .map_err(|error| format!("QQ 音乐返回了无效数据：{error}"))?;
+
+    let charts = body
+        .pointer("/data/topList")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|item| {
+            let id = item.get("id")?.as_i64()?;
+            Some(json!({
+                "id": id,
+                "name": item.get("topTitle").and_then(Value::as_str).unwrap_or(""),
+                "cover": item.get("picUrl").and_then(Value::as_str).unwrap_or("").replace("http://", "https://"),
+                "count": item.get("listenCount").and_then(Value::as_i64).unwrap_or(0),
+                "note": "QQ 音乐",
+                "source": "qq",
+            }))
+        })
+        .collect::<Vec<_>>();
+
+    Ok(json!({ "charts": charts }))
+}
+
+#[tauri::command]
+pub async fn qq_chart(id: String) -> Result<Value, String> {
+    let body: Value = client()?
+        .get("https://c.y.qq.com/v8/fcg-bin/fcg_v8_toplist_cp.fcg")
+        .query(&[
+            ("topid", id.as_str()),
+            ("format", "json"),
+            ("page", "detail"),
+            ("type", "top"),
+            ("tpl", "3"),
+            ("song_begin", "0"),
+            ("song_num", "100"),
+            ("song_tag", "0"),
+        ])
+        .header("Referer", YQQ)
+        .send()
+        .await
+        .map_err(|error| format!("QQ 音乐连不上：{error}"))?
+        .json()
+        .await
+        .map_err(|error| format!("QQ 音乐返回了无效数据：{error}"))?;
+
+    let songs = body
+        .get("songlist")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let tracks = songs
+        .iter()
+        .filter_map(|row| {
+            let song = row.get("data")?;
+            let mid = song.get("songmid")?.as_str()?;
+            let album = song.get("albummid").and_then(Value::as_str).unwrap_or("");
+            let artists = song
+                .get("singer")
+                .and_then(Value::as_array)
+                .map(|list| {
+                    list.iter()
+                        .filter_map(|artist| artist.get("name").and_then(Value::as_str))
+                        .collect::<Vec<_>>()
+                        .join(" / ")
+                })
+                .unwrap_or_default();
+            let media = song
+                .pointer("/file/media_mid")
+                .and_then(Value::as_str)
+                .unwrap_or(mid);
+            Some(json!({
+                "id": mid,
+                "media": media,
+                "name": song.get("songname").and_then(Value::as_str).unwrap_or(""),
+                "artist": artists,
+                "album": song.get("albumname").and_then(Value::as_str).unwrap_or(""),
+                "cover": if album.is_empty() { String::new() } else { format!("https://y.gtimg.cn/music/photo_new/T002R300x300M000{album}.jpg") },
+                "duration": song.get("interval").and_then(Value::as_i64).unwrap_or(0) * 1000,
+            }))
+        })
+        .collect::<Vec<_>>();
+
+    Ok(json!({
+        "name": body.pointer("/topinfo/title").and_then(Value::as_str).unwrap_or("排行榜"),
+        "tracks": tracks,
+    }))
+}

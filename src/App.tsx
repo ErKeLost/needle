@@ -578,9 +578,10 @@ export default function App() {
         open={libraryOpen}
         cookie={accounts.netease}
         onClose={() => setLibraryOpen(false)}
-        onPlay={(tracks, index) => {
+        onPlay={(tracks, index, sourceId) => {
+          const from = allSources.find((item) => item.id === sourceId) ?? neteaseSource;
           setQueue(tracks);
-          void load(tracks[index], neteaseSource);
+          void load(tracks[index], from);
           setLibraryOpen(false);
         }}
       />
