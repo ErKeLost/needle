@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "The window, the file picker and the netease commands",
   "windows": ["main"],
-  "permissions": ["core:default", "dialog:default"]
+  "permissions": ["core:default", "dialog:default", "updater:default", "process:allow-restart"]
 }
