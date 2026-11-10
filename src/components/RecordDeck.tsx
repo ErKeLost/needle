@@ -97,7 +97,7 @@ export function RecordDeck({ playing, progress, onToggle, title, artwork, palett
       <button
         type="button"
         className="platter"
-        data-spinning={playing && spin}
+        data-spinning={spin}
         onClick={onToggle}
         aria-label={playing ? `Pause ${title}` : `Play ${title}`}
       >

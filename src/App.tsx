@@ -85,7 +85,7 @@ export default function App() {
   }, [allSources, settings.enabled]);
 
   const load = useCallback(
-    async (next: Track, from: MusicSource, remember = true): Promise<boolean> => {
+    async (next: Track, from: MusicSource, remember = true, play = false): Promise<boolean> => {
       const token = ++openToken.current;
       transport.pause();
       setPlaying(false);
@@ -110,6 +110,10 @@ export default function App() {
         setDuration(transport.duration || next.duration);
         setReady(true);
         if (remember) writeLast(from.id, next);
+        if (play) {
+          await transport.play();
+          setPlaying(transport.isPlaying);
+        }
         return true;
       } catch (error) {
         if (token !== openToken.current) return false;
@@ -274,7 +278,7 @@ export default function App() {
       if (!queue.length) return;
       const index = queue.findIndex((item) => item.id === track.id);
       const next = queue[(index + direction + queue.length) % queue.length];
-      void load(next, source);
+      void load(next, source, true, true);
     },
     [load, queue, source, track.id],
   );
@@ -398,7 +402,7 @@ export default function App() {
         setSearchSource(null);
         setView("playing");
         setQueue(hits);
-        void load(next, searchSource);
+        void load(next, searchSource, true, true);
       }}
     />
   ) : null;
@@ -581,7 +585,7 @@ export default function App() {
         onPlay={(tracks, index, sourceId) => {
           const from = allSources.find((item) => item.id === sourceId) ?? neteaseSource;
           setQueue(tracks);
-          void load(tracks[index], from);
+          void load(tracks[index], from, true, true);
           setLibraryOpen(false);
         }}
       />

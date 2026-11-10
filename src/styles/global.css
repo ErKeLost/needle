@@ -2941,3 +2941,13 @@ kbd {
   font-size: 10px;
   color: var(--paper-30);
 }
+
+/* The platter never stops turning; only the arm lifts. */
+.arm {
+  transform: rotate(-11.5deg);
+  transition: transform 720ms cubic-bezier(0.34, 1.4, 0.5, 1);
+}
+
+.arm[data-lifted="true"] {
+  transform: rotate(-22deg) translateY(-0.6vh);
+}
