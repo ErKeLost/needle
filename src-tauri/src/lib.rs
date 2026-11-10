@@ -1,3 +1,4 @@
+mod art;
 mod auth;
 mod cache;
 mod netease;
@@ -11,6 +12,8 @@ mod qq;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
             netease::init(app.handle());
             Ok(())
@@ -18,21 +21,32 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             netease::netease_search,
             netease::netease_chart,
+            netease::netease_library,
+            netease::netease_playlist,
+            netease::netease_charts,
             netease::netease_lyric,
             netease::netease_stream,
             qq::qq_search,
             qq::qq_lyric,
             qq::qq_stream,
+            qq::qq_charts,
+            qq::qq_chart,
+            qq::qq_library,
+            qq::qq_playlist,
             qishui::qishui_search,
             qishui::qishui_track,
             qishui::qishui_stream,
             qq_login::qq_qr_create,
             qq_login::qq_qr_poll,
             qq_login::qq_qr_exchange,
+            qq_login::qq_profile,
             netease_login::netease_qr_create,
             netease_login::netease_qr_poll,
+            netease_login::netease_profile,
+            art::cover_palette,
             qishui_login::qishui_qr_create,
             qishui_login::qishui_qr_poll,
+            qishui_login::qishui_profile,
             cache::cache_usage,
             cache::cache_clear,
             auth::open_login
