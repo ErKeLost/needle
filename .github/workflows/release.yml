@@ -98,9 +98,15 @@ jobs:
 
       - name: NDK and Rust targets
         run: |
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager --install "ndk;27.0.12077973" "platforms;android-34" "build-tools;34.0.0"
-          echo "NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> $GITHUB_ENV
+          # The runner ships an NDK; use it instead of asking sdkmanager,
+          # whose package list changes between cmdline-tools versions.
+          NDK="$(ls -d "$ANDROID_HOME"/ndk/* 2>/dev/null | tail -1)"
+          if [ -z "$NDK" ]; then
+            yes | sdkmanager --licenses > /dev/null || true
+            sdkmanager --install "ndk;27.0.12077973" > /dev/null
+            NDK="$ANDROID_HOME/ndk/27.0.12077973"
+          fi
+          echo "NDK_HOME=$NDK" >> $GITHUB_ENV
           rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
 
       - run: npm ci
