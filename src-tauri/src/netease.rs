@@ -664,13 +664,13 @@ pub async fn netease_library(cookie: String) -> Result<Value, String> {
     }))
 }
 
-/// One shelf, as tracks the player can queue. The detail answer carries the
-/// name; the songs come from track/all, because detail no longer lists them.
+/// One shelf, as tracks the player can queue. The order is `trackIds`; the
+/// songs come from `/api/v3/song/detail` in batches, as the MyGo plugin does.
 #[tauri::command]
 pub async fn netease_playlist(cookie: String, id: String) -> Result<Value, String> {
     let http = client()?;
     let detail: Value = http
-        .get(format!("{SITE}/api/playlist/detail"))
+        .get(format!("{SITE}/api/v6/playlist/detail"))
         .query(&[("id", id.as_str()), ("n", "1000")])
         .header("Referer", referer())
         .header("Cookie", &cookie)
@@ -681,34 +681,34 @@ pub async fn netease_playlist(cookie: String, id: String) -> Result<Value, Strin
         .await
         .map_err(|error| format!("网易云返回了无效数据：{error}"))?;
 
-    let songs: Vec<Value> = match http
-        .get(format!("{SITE}/api/playlist/track/all"))
-        .query(&[("id", id.as_str()), ("limit", "1000"), ("offset", "0")])
-        .header("Referer", referer())
-        .header("Cookie", &cookie)
-        .send()
-        .await
-    {
-        Ok(response) => match response.json::<Value>().await {
-            Ok(body) => body
-                .get("songs")
-                .and_then(Value::as_array)
-                .cloned()
-                .unwrap_or_default(),
-            Err(_) => Vec::new(),
-        },
-        Err(_) => Vec::new(),
-    };
+    if detail.get("playlist").is_none() {
+        return Err("歌单不存在或当前账号无权访问".into());
+    }
+    let name = detail
+        .pointer("/playlist/name")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
 
-    let songs = if songs.is_empty() {
-        detail
-            .pointer("/playlist/tracks")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default()
-    } else {
-        songs
-    };
+    let ids: Vec<i64> = detail
+        .pointer("/playlist/trackIds")
+        .and_then(Value::as_array)
+        .map(|list| {
+            list.iter()
+                .filter_map(|item| item.get("id").and_then(Value::as_i64))
+                .take(1000)
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let mut songs: Vec<Value> = Vec::new();
+    for batch in ids.chunks(100) {
+        let c = json!(batch.iter().map(|id| json!({ "id": id })).collect::<Vec<_>>()).to_string();
+        let body = eapi("/api/v3/song/detail", json!({ "c": c }), Some(&cookie)).await?;
+        if let Some(list) = body.get("songs").and_then(Value::as_array) {
+            songs.extend(list.iter().cloned());
+        }
+    }
 
     let tracks = songs
         .iter()
@@ -737,8 +737,5 @@ pub async fn netease_playlist(cookie: String, id: String) -> Result<Value, Strin
         })
         .collect::<Vec<_>>();
 
-    Ok(json!({
-        "name": detail.pointer("/playlist/name").and_then(Value::as_str).unwrap_or(""),
-        "tracks": tracks,
-    }))
+    Ok(json!({ "name": name, "tracks": tracks }))
 }
