@@ -8,6 +8,17 @@ Built with Tauri 2 and Vite. Sources are pluggable: the built-in session, local
 files, NetEase Cloud Music and QQ Music all answer the same small interface, so
 the page does not know where a song came from.
 
+## Release
+
+Pushing a tag builds every platform on GitHub:
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+`.github/workflows/release.yml` runs on macOS (arm64 + x64), Ubuntu and
+Windows, uploads the bundles and opens a draft release.
+
 ## Run
 
 ```bash

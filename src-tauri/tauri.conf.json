@@ -35,7 +35,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["app"],
+    "targets": "all",
     "resources": ["resources/qishui/*"],
     "icon": [
       "icons/32x32.png",
