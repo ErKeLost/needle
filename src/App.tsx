@@ -527,11 +527,21 @@ export default function App() {
               <path d="M17.5 9.5v8.2a1.9 1.9 0 1 1-1.6-1.9V7l4-1v3" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
-          {profiles[selectedId] && (
+          {profiles[selectedId] ? (
             <span className="meta__me">
               {profiles[selectedId].avatar && <img src={profiles[selectedId].avatar} alt="" />}
               <span>{profiles[selectedId].name}</span>
             </span>
+          ) : (
+            ["netease", "qq", "qishui"].includes(selectedId) && (
+              <button
+                type="button"
+                className="meta__signin"
+                onClick={() => setLogin({ id: selectedId })}
+              >
+                未登录
+              </button>
+            )
           )}
           <SourceMenu
             sources={sources}

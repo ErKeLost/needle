@@ -2960,3 +2960,18 @@ kbd {
 .arm[data-lifted="true"] {
   transform: rotate(-24deg) translateY(-0.8vh);
 }
+
+.meta__signin {
+  border: 0;
+  background: none;
+  padding: 4px 2px;
+  font-size: 11px;
+  color: var(--paper-30);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.meta__signin:hover {
+  color: var(--paper-72);
+}

@@ -352,7 +352,7 @@ mod tests {
 
 /// Who the musicid belongs to, for the corner of the player.
 #[tauri::command]
-pub async fn qq_profile(cookie: String) -> Result<Value, String> {
+pub async fn qq_profile(app: tauri::AppHandle, cookie: String) -> Result<Value, String> {
     let uin = serde_json::from_str::<Value>(&cookie)
         .ok()
         .and_then(|session| {
@@ -384,6 +384,18 @@ pub async fn qq_profile(cookie: String) -> Result<Value, String> {
         .json()
         .await
         .map_err(|error| format!("QQ 返回了无效数据：{error}"))?;
+
+    if let Ok(dir) = tauri::Manager::path(&app).app_config_dir() {
+        use std::io::Write;
+        let _ = std::fs::create_dir_all(&dir);
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(dir.join("qq-profile.log"))
+        {
+            let _ = writeln!(file, "body={body}");
+        }
+    }
 
     let creator = body.pointer("/data/creator").cloned().unwrap_or(Value::Null);
     let name = creator
