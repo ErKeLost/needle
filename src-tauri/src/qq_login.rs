@@ -211,6 +211,11 @@ pub async fn qq_qr_exchange(url: String) -> Result<Value, String> {
     }
 
     let p_skey = jar.get("p_skey").cloned().unwrap_or_default();
+    qq_log(&format!(
+        "check_sig cookies={:?} p_skey={}",
+        jar.keys().collect::<Vec<_>>(),
+        if p_skey.is_empty() { "none" } else { "ok" }
+    ));
     if p_skey.is_empty() {
         return Err("QQ 没有下发 p_skey".into());
     }
@@ -250,6 +255,7 @@ pub async fn qq_qr_exchange(url: String) -> Result<Value, String> {
         .unwrap_or("")
         .to_string();
     let code = query_of(&location, "code");
+    qq_log(&format!("authorize location={} code={}", location, if code.is_empty() { "none" } else { "ok" }));
     if code.is_empty() {
         return Err("QQ 授权没有返回 code".into());
     }
@@ -295,6 +301,12 @@ pub async fn qq_qr_exchange(url: String) -> Result<Value, String> {
         .and_then(Value::as_str)
         .unwrap_or("")
         .to_string();
+    qq_log(&format!(
+        "login musicid={} musickey={} answer={}",
+        musicid,
+        if musickey.is_empty() { "none" } else { "ok" },
+        answer.to_string().chars().take(300).collect::<String>()
+    ));
     if musicid.is_empty() || musickey.is_empty() {
         return Err("QQ 登录没有拿到 musickey".into());
     }
@@ -313,6 +325,21 @@ pub async fn qq_qr_exchange(url: String) -> Result<Value, String> {
         "name": name,
         "musicid": musicid,
     }))
+}
+
+fn qq_log(line: &str) {
+    let home = std::env::var("HOME").unwrap_or_default();
+    let dir = std::path::PathBuf::from(home)
+        .join("Library/Application Support/app.needle.player");
+    let _ = std::fs::create_dir_all(&dir);
+    use std::io::Write;
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(dir.join("qq-login.log"))
+    {
+        let _ = writeln!(file, "{line}");
+    }
 }
 
 fn device_id() -> String {
@@ -384,6 +411,9 @@ pub async fn qq_profile(app: tauri::AppHandle, cookie: String) -> Result<Value, 
         }
     }
 
+    if body.get("code").and_then(Value::as_i64) == Some(1000) {
+        return Err("QQ 登录已失效，重新扫一次".into());
+    }
     let creator = body.pointer("/data/creator").cloned().unwrap_or(Value::Null);
     let name = creator
         .get("nick")

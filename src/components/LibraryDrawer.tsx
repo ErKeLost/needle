@@ -70,7 +70,7 @@ export function LibraryDrawer({ open, cookie, sourceId, profile, onClose, onPlay
 
     if (cookie) {
       const command = sourceId === "qq" ? "qq_library" : "netease_library";
-      void invoke<Answer>(command, { cookie })
+      void invoke<Answer>(command, sourceId === "qq" ? { session: cookie } : { cookie })
         .then((answer) => alive && setData(answer))
         .catch((problem) => {
           if (alive) setError(typeof problem === "string" ? problem : "读取歌单失败");
@@ -94,10 +94,14 @@ export function LibraryDrawer({ open, cookie, sourceId, profile, onClose, onPlay
             ? "qq_chart"
             : "qq_playlist"
           : "netease_playlist";
-      const answer = await invoke<{ name: string; tracks: Row[] }>(command, {
-        cookie: item.source === "qq" ? cookie : cookie,
-        id: String(item.id),
-      });
+      const answer = await invoke<{ name: string; tracks: Row[] }>(
+        command,
+        item.source === "qq"
+          ? item.kind === "chart"
+            ? { id: String(item.id) }
+            : { session: cookie, id: String(item.id) }
+          : { cookie, id: String(item.id) },
+      );
       setShelf({
         name: answer.name || item.name,
         source: item.source,
