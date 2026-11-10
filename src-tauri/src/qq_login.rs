@@ -403,11 +403,11 @@ pub async fn qq_profile(app: tauri::AppHandle, cookie: String) -> Result<Value, 
         .filter(|value| !value.is_empty())
         .unwrap_or(name);
 
-    if nickname.is_empty() {
-        return Err("QQ 登录已失效，重新扫一次".into());
-    }
+    // QQ often refuses this CGI (code 1000) while the music session is still
+    // valid; the MyGo plugin then falls back to the name it got at sign-in.
+    let display = if nickname.is_empty() { "QQ 音乐" } else { nickname };
     Ok(json!({
-        "name": nickname,
+        "name": display,
         "avatar": creator.get("headpic").and_then(Value::as_str).unwrap_or(""),
     }))
 }
