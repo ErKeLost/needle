@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { ChordLane } from "./components/ChordLane";
 import { RecordDeck } from "./components/RecordDeck";
 import { LibraryDrawer } from "./components/LibraryDrawer";
@@ -9,6 +10,7 @@ import { SettingsView } from "./components/SettingsView";
 import { SourceMenu } from "./components/SourceMenu";
 import { TransportBar } from "./components/TransportBar";
 import { Transport } from "./audio/transport";
+import { linesOf, streamOf, warmAhead } from "./audio/prefetch";
 import type { MusicSource, Track } from "./music/types";
 import { invoke } from "@tauri-apps/api/core";
 import { useAccounts, useProfiles } from "./accounts";
@@ -29,6 +31,16 @@ const PLACEHOLDER: Track = {
   sourceId: "none",
 };
 const LAST_KEY = "needle.last.v2";
+
+/**
+ * A change of side turns the sheet over: what was on the platter leaves the way
+ * the hand went, and the next one follows it in.
+ */
+const pageMotion = {
+  enter: (direction: number) => ({ y: direction * 58, opacity: 0 }),
+  center: { y: 0, opacity: 1 },
+  exit: (direction: number) => ({ y: direction * -58, opacity: 0 }),
+};
 
 type LastPlayed = { sourceId: string; track: Track };
 
@@ -77,6 +89,7 @@ export default function App() {
   const [searchSource, setSearchSource] = useState<MusicSource | null>(null);
   const [login, setLogin] = useState<{ id: string; after?: MusicSource } | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [turn, setTurn] = useState(1);
   const [updateNote, setUpdateNote] = useState<string | null>(null);
 
   // One quiet check per launch; a newer release installs itself and restarts.
@@ -113,14 +126,19 @@ export default function App() {
       setDuration(next.duration);
       setProblem(null);
       try {
-        // Words first: they arrive quickly and the stage can fill while the
-        // audio is still being fetched.
+        // The words and the audio are asked for at once. The sheet fills the
+        // stage as soon as it lands, and the download no longer waits behind
+        // the lyric round trip first.
+        const opening = streamOf(from, next, accountsRef.current[from.id]);
         if (from.lyrics && !next.lines.length) {
-          const lines = await from.lyrics(next).catch(() => next.lines);
-          if (token !== openToken.current) return false;
-          if (lines.length) setTrack({ ...next, lines });
+          void linesOf(from, next)
+            .then((lines) => {
+              if (!lines.length || token !== openToken.current) return;
+              setTrack((current) => (current.id === next.id ? { ...current, lines } : current));
+            })
+            .catch(() => undefined);
         }
-        const stream = await from.stream(next, { cookie: accountsRef.current[from.id] });
+        const stream = await opening;
         if (token !== openToken.current) return false;
         await transport.load(stream.audio, next.duration);
         if (token !== openToken.current) return false;
@@ -180,7 +198,12 @@ export default function App() {
           // rate limited in the first place.
           const first = chart[0];
           if (!alive) return;
-          if (first && (await load(first, neteaseSource, false))) return;
+          if (first && (await load(first, neteaseSource, false))) {
+            // The rest of the chart becomes the queue, so the sides after
+            // this one can be warmed and "next" needs no download.
+            if (alive) setQueue(chart);
+            return;
+          }
         } catch {
           // no network, or NetEase is holding us off
         }
@@ -295,12 +318,91 @@ export default function App() {
       if (!queue.length) return;
       const index = queue.findIndex((item) => item.id === track.id);
       const next = queue[(index + direction + queue.length) % queue.length];
+      setTurn(direction);
       void load(next, source, true, true);
     },
     [load, queue, source, track.id],
   );
 
   stepRef.current = step;
+
+  const player = useRef<HTMLElement | null>(null);
+  const wheel = useRef({ sum: 0, at: 0, until: 0, armed: true });
+
+  // A wheel or a trackpad flick moves through the queue, one side per gesture:
+  // the travel is gathered until the hand clearly means it, and the momentum
+  // that follows is read as the same gesture, not a second request.
+  useEffect(() => {
+    const element = player.current;
+    if (!element) return;
+
+    const onWheel = (event: WheelEvent) => {
+      if (event.ctrlKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("[role='slider'], input, textarea, .drawer")) return;
+
+      const delta =
+        event.deltaMode === 1
+          ? event.deltaY * 18
+          : event.deltaMode === 2
+            ? event.deltaY * 480
+            : event.deltaY;
+      if (!delta) return;
+
+      const now = performance.now();
+      const gate = wheel.current;
+      // A pause is the end of one gesture and the start of the next.
+      if (now - gate.at > 220) {
+        gate.sum = 0;
+        gate.armed = true;
+      }
+      gate.at = now;
+      if (!gate.armed || now < gate.until) return;
+
+      if (delta * gate.sum < 0) gate.sum = 0;
+      gate.sum += delta;
+      if (Math.abs(gate.sum) < 52) return;
+
+      const direction = gate.sum > 0 ? 1 : -1;
+      gate.sum = 0;
+      gate.armed = false;
+      gate.until = now + 320;
+      event.preventDefault();
+      stepRef.current(direction);
+    };
+
+    element.addEventListener("wheel", onWheel, { passive: false });
+    return () => element.removeEventListener("wheel", onWheel);
+  }, [view]);
+
+  // Warm the sides either side of the one on the platter, so "next" is a
+  // local file read instead of a download.
+  useEffect(() => {
+    if (!ready || queue.length < 2) return;
+    const index = queue.findIndex((item) => item.id === track.id);
+    if (index < 0) return;
+
+    const seen = new Set<string>([track.id]);
+    const around: Track[] = [];
+    for (const offset of [1, 2, -1]) {
+      const item = queue[(index + offset + queue.length) % queue.length];
+      if (!item || seen.has(item.id)) continue;
+      seen.add(item.id);
+      around.push(item);
+    }
+    if (!around.length) return;
+
+    let alive = true;
+    // A beat of quiet first: the side on the platter settles before its
+    // neighbours start using the line.
+    const timer = window.setTimeout(() => {
+      void warmAhead(source, around, accountsRef.current[source.id], () => alive);
+    }, 1500);
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
+  }, [ready, queue, track.id, source]);
 
   // Duration of a local file only arrives with its metadata.
   useEffect(() => {
@@ -478,6 +580,7 @@ export default function App() {
     <>
       <main
         className="player"
+        ref={player}
         data-playing={playing}
         data-dropping={dropping}
         data-blur={settings.neighborBlur ? "on" : "off"}
@@ -573,9 +676,20 @@ export default function App() {
             <p className="empty__hint">⌘K to search · the menu at the top right switches sources</p>
           </div>
         ) : (
-          <div className="stage">
-            <ChordLane track={track} time={time} />
-          </div>
+          <AnimatePresence custom={turn} initial={false}>
+            <motion.div
+              key={track.id}
+              className="stage"
+              custom={turn}
+              variants={pageMotion}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ type: "spring", stiffness: 240, damping: 30, mass: 0.9 }}
+            >
+              <ChordLane track={track} time={time} curve={settings.curve} tilt={settings.lyricTilt} />
+            </motion.div>
+          </AnimatePresence>
         )}
 
         {!empty && (

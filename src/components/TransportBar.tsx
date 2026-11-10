@@ -66,7 +66,7 @@ export function TransportBar({
             aria-label={playing ? "Pause" : "Play"}
             aria-busy={!ready}
             onPress={onToggle}
-            className="size-10 min-w-10 text-[var(--paper)] data-[hovered=true]:text-white"
+            className="bar__play-btn size-11 min-w-11 text-[var(--paper)] data-[hovered=true]:text-white"
           >
             {playing ? <PauseIcon /> : <PlayIcon />}
           </Button>
@@ -94,9 +94,9 @@ export function TransportBar({
           variant="ghost"
           aria-label={volume > 0 ? "Mute" : "Unmute"}
           onPress={() => onVolume(volume > 0 ? 0 : 0.8)}
-          className="size-8 min-w-8 text-[var(--paper-46)] data-[hovered=true]:text-[var(--paper-72)]"
+          className="size-9 min-w-9 text-[var(--paper-46)] data-[hovered=true]:text-[var(--paper-72)]"
         >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
               {volume > 0 ? (
                 <>
                   <path d="M4 9v6h4l5 4V5L8 9H4Z" strokeLinejoin="round" />
@@ -117,9 +117,9 @@ export function TransportBar({
             variant="ghost"
             aria-label="Settings"
             onPress={onOpenSettings}
-            className="size-8 min-w-8 text-[var(--paper-46)] data-[hovered=true]:text-[var(--paper-72)]"
+            className="size-9 min-w-9 text-[var(--paper-46)] data-[hovered=true]:text-[var(--paper-72)]"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
               <circle cx="12" cy="12" r="3.1" />
               <path d="M12 3.6v2.2M12 18.2v2.2M20.4 12h-2.2M5.8 12H3.6M18 6l-1.6 1.6M7.6 16.4 6 18M18 18l-1.6-1.6M7.6 7.6 6 6" strokeLinecap="round" />
             </svg>

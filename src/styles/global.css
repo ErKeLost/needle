@@ -506,7 +506,7 @@ button {
   display: grid;
   grid-template-columns: 68px 1fr;
   align-items: baseline;
-  font-size: clamp(22px, 2.45vw, 38px);
+  font-size: clamp(19px, 2vw, 31px);
   transform: translateY(calc(-50% + var(--d) * 94px)) scale(0.72);
   transform-origin: 0 50%;
   opacity: 0.3;
@@ -562,7 +562,9 @@ button {
   position: relative;
   display: inline-flex;
   align-items: baseline;
-  transition: color 200ms linear;
+  /* The word being sung is animated per frame; a colour transition on top of
+     that only puts the highlight behind the voice. */
+  transition: color 90ms linear;
 }
 
 .token.is-past {
@@ -916,7 +918,7 @@ button {
 .token--word {
   padding: 0 0.04em;
   box-shadow: inset 0 -0.09em 0 transparent;
-  transition: color 200ms linear, box-shadow 160ms linear;
+  transition: box-shadow 140ms linear;
 }
 
 .token--word.is-on {
@@ -1262,7 +1264,7 @@ kbd {
 
 /* Appearance settings reach the stage through the player element. */
 .lane__row {
-  font-size: calc(clamp(22px, 2.45vw, 38px) * var(--lyric-scale, 1));
+  font-size: calc(clamp(19px, 2vw, 31px) * var(--lyric-scale, 1));
 }
 
 .player[data-blur="off"] .lane__row {
@@ -1662,15 +1664,21 @@ kbd {
 }
 
 .bar__btn {
-  width: 40px;
-  min-width: 40px;
-  height: 40px;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
   color: var(--paper-72);
 }
 
 .bar__btn svg {
-  width: 20px;
-  height: 20px;
+  width: 23px;
+  height: 23px;
+}
+
+/* Play and pause carry the same weight as the arrows either side. */
+.bar__play-btn svg {
+  width: 22px;
+  height: 22px;
 }
 
 .bar__btn[data-hovered="true"] {
@@ -1763,9 +1771,10 @@ kbd {
   box-shadow: none;
 }
 
-/* Every line starts on the same left edge, whatever its scale. */
+/* The turn of each line is measured from the platter and set on the element,
+   so the sheet leans the way its grooves run. */
 .lane__row {
-  transform-origin: left center;
+  transform-origin: 0 50%;
 }
 
 .lane--words .lane__tokens {
@@ -2744,6 +2753,41 @@ kbd {
   cursor: pointer;
 }
 
+/* The shelf's own controls sit together at the right of the head, so a long
+   playlist name loses its tail rather than the buttons. */
+.drawer__actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: none;
+}
+
+.drawer__all {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px 6px 9px;
+  border: 1px solid rgba(243, 236, 227, 0.14);
+  border-radius: 999px;
+  background: rgba(243, 236, 227, 0.05);
+  color: var(--paper);
+  font-size: 11.5px;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background-color 140ms linear, border-color 140ms linear;
+}
+
+.drawer__all:hover {
+  background: rgba(243, 236, 227, 0.1);
+  border-color: rgba(243, 236, 227, 0.26);
+}
+
+.drawer__all svg {
+  width: 11px;
+  height: 11px;
+  color: var(--ember);
+}
+
 .drawer__note,
 .drawer__error {
   margin: 0;
@@ -2856,6 +2900,7 @@ kbd {
   color: var(--paper-72);
   font-size: 13px;
   cursor: pointer;
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

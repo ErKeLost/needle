@@ -264,6 +264,37 @@ export function SettingsView({
             </div>
             <div className="row">
               <div className="row__text">
+                <span className="row__name">Curved lines</span>
+                <span className="row__note">Fan the sheet around the platter</span>
+              </div>
+              <div className="row__control">
+                <Toggle
+                  checked={settings.curve}
+                  label="Curve the lines"
+                  onChange={(value) => onChange({ curve: value })}
+                />
+              </div>
+            </div>
+            <div className="row">
+              <div className="row__text">
+                <span className="row__name">Fan</span>
+                <span className="row__note">How far the neighbours lean toward the record</span>
+              </div>
+              <div className="row__control">
+                <Segmented
+                  label="Fan"
+                  value={String(settings.lyricTilt)}
+                  options={[
+                    { value: "1.1", label: "S" },
+                    { value: "1.6", label: "M" },
+                    { value: "2.2", label: "L" },
+                  ]}
+                  onChange={(value) => onChange({ lyricTilt: Number(value) })}
+                />
+              </div>
+            </div>
+            <div className="row">
+              <div className="row__text">
                 <span className="row__name">The word being sung</span>
                 <span className="row__note">How the needle marks it</span>
               </div>

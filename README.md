@@ -111,6 +111,7 @@ src-tauri/
   src/qq_login.rs      QR sign-in and the check_sig → oauth exchange
   src/qishui.rs        signed track requests and the audio cache
   src/qishui_login.rs  ByteDance passport QR sign-in
+  src/stream.rs        the loopback port that streams a song while it arrives
   src/art.rs           the cover palette the vinyl is dyed with
 docs/                  notes on MyGo Music and on Soda's signing
 ```
@@ -127,6 +128,12 @@ docs/                  notes on MyGo Music and on Soda's signing
   cached audio first. Waiting is part of using it.
 - **QQ Music** needs a signed-in session for audio, and its profile CGI often
   refuses even then; the name comes from the sign-in response.
+- **Audio starts before it has arrived.** A CDN refuses a WebView that cannot
+  send its Referer, so `src-tauri/src/stream.rs` serves the sound from a port on
+  127.0.0.1 and forwards the player's byte ranges to the service. First chunk, not
+  last: a seek is a new range. A pass that covers a whole song is written to the
+  cache on the way through, and the two sides after the one on the platter are
+  fetched ahead, so most presses need no network at all.
 - The app keeps one cached copy per song for playback. Artwork and audio belong
   to their services.
 

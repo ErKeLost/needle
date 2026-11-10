@@ -1,6 +1,7 @@
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 import type { MusicSource, StageLine, Token, Track } from "../music/types";
 import { inTauri } from "./local";
+import { openAudio } from "./open";
 
 /**
  * 汽水音乐. Search goes straight to `api.qishui.com`; a track needs the signed
@@ -81,11 +82,13 @@ export const qishuiSource: MusicSource = {
 
   async stream(track, options) {
     if (!inTauri()) throw new Error("汽水音乐播放需要桌面版");
-    const answer = await invoke<{ path: string }>("qishui_stream", {
-      id: idOf(track),
-      cookie: options?.cookie ?? null,
-    });
-    return { audio: { kind: "url", url: convertFileSrc(answer.path) }, duration: track.duration };
+    return openAudio("qishui", idOf(track), track, options);
+  },
+
+  /** Fetch the whole side into the cache, for the tracks after this one. */
+  async warm(track, options) {
+    if (!inTauri()) return;
+    await invoke("qishui_stream", { id: idOf(track), cookie: options?.cookie ?? null });
   },
 
   async lyrics(track) {

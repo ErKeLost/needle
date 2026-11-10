@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { invoke } from "@tauri-apps/api/core";
 import { clock } from "../music/notes";
 import type { Track } from "../music/types";
+import { PlayIcon } from "./icons";
 
 type Shelf = {
   id: number;
@@ -151,9 +152,21 @@ export function LibraryDrawer({ open, cookie, sourceId, profile, onClose, onPlay
                   <span>{profile?.name || "未登录"}</span>
                 </span>
               )}
-              <button type="button" className="drawer__close" onClick={onClose} aria-label="关闭">
-                ✕
-              </button>
+              <span className="drawer__actions">
+                {shelf && shelf.tracks.length > 0 && (
+                  <button
+                    type="button"
+                    className="drawer__all"
+                    onClick={() => onPlay(shelf.tracks, 0, shelf.source)}
+                  >
+                    <PlayIcon />
+                    播放全部
+                  </button>
+                )}
+                <button type="button" className="drawer__close" onClick={onClose} aria-label="关闭">
+                  ✕
+                </button>
+              </span>
             </header>
 
             {error && <p className="drawer__error">{error}</p>}

@@ -11,7 +11,9 @@ use tauri::{AppHandle, Manager};
 
 const API: &str = "https://api.qishui.com";
 const UA_MOBILE: &str = "com.luna.music/100198030 (Linux; U; Android 15; zh_CN; ABR-AL80; Build/V417IR;tt-ok/3.12.13.19)";
-const UA_PC: &str = "LunaPC/3.7.0(452316191)";
+pub(crate) const UA_PC: &str = "LunaPC/3.7.0(452316191)";
+/// 汽水的音频主机不要 Referer，留一个名字给共用的代理。
+pub(crate) const REFERER: &str = "";
 
 fn client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
@@ -289,66 +291,56 @@ pub async fn qishui_track(app: AppHandle, id: String, cookie: Option<String>) ->
     }))
 }
 
+/// The main and backup address for a track, from the same signed call the
+/// player uses for the lyric sheet.
+async fn addresses(app: &AppHandle, id: &str, cookie: Option<&str>) -> Result<(String, String), String> {
+    let answer = qishui_track(app.clone(), id.to_string(), cookie.map(str::to_string)).await?;
+    let url = answer.get("url").and_then(Value::as_str).unwrap_or("");
+    if url.is_empty() {
+        return Err("这首歌在汽水需要会员或已下架".into());
+    }
+    let backup = answer.get("backup").and_then(Value::as_str).unwrap_or("");
+    Ok((url.to_string(), backup.to_string()))
+}
+
+/// What the player should stream, checked with two bytes so a host that has
+/// gone away does not become a broken side.
+pub(crate) async fn resolve(
+    app: &AppHandle,
+    id: &str,
+    cookie: Option<&str>,
+) -> Result<(String, String), String> {
+    let (url, backup) = addresses(app, id, cookie).await?;
+    for candidate in [url.as_str(), backup.as_str()] {
+        if candidate.is_empty() {
+            continue;
+        }
+        if crate::stream::probe(candidate, UA_PC, REFERER).await.is_ok() {
+            return Ok((candidate.to_string(), "mp4".to_string()));
+        }
+    }
+    Err("汽水的音频地址打不开".into())
+}
+
+/// The whole side, for warming a track ahead of the hand.
 #[tauri::command]
 pub async fn qishui_stream(app: AppHandle, id: String, cookie: Option<String>) -> Result<Value, String> {
-    let directory = app
-        .path()
-        .app_cache_dir()
-        .map_err(|error| format!("无法定位缓存目录：{error}"))?
-        .join("audio");
-    tokio::fs::create_dir_all(&directory)
-        .await
-        .map_err(|error| format!("无法建立缓存目录：{error}"))?;
-    let file = directory.join(format!("qishui-{id}.mp4"));
-
-    if !file.exists() {
-        let answer = qishui_track(app.clone(), id.clone(), cookie).await?;
-        let url = answer.get("url").and_then(Value::as_str).unwrap_or("");
-        if url.is_empty() {
-            return Err("这首歌在汽水需要会员或已下架".into());
-        }
-        let bytes = match client()?
-            .get(url)
-            .header("User-Agent", UA_PC)
-            .send()
-            .await
-            .and_then(|response| response.error_for_status())
-        {
-            Ok(response) => response
-                .bytes()
-                .await
-                .map_err(|error| format!("音频读取失败：{error}"))?,
-            Err(first) => {
-                // The VOD host hands out a backup address in the same payload.
-                let backup = answer.get("backup").and_then(Value::as_str).unwrap_or("");
-                if backup.is_empty() {
-                    return Err(format!("音频下载失败：{first}"));
-                }
-                client()?
-                    .get(backup)
-                    .header("User-Agent", UA_PC)
-                    .send()
-                    .await
-                    .map_err(|error| format!("音频下载失败：{error}"))?
-                    .error_for_status()
-                    .map_err(|error| format!("音频下载失败：{error}"))?
-                    .bytes()
-                    .await
-                    .map_err(|error| format!("音频读取失败：{error}"))?
-            }
-        };
-        if bytes.len() < 16 * 1024 {
-            return Err("汽水只返回了空音频".into());
-        }
-        let partial = file.with_extension("mp4.part");
-        tokio::fs::write(&partial, &bytes)
-            .await
-            .map_err(|error| format!("无法写入缓存：{error}"))?;
-        tokio::fs::rename(&partial, &file)
-            .await
-            .map_err(|error| format!("无法完成缓存：{error}"))?;
+    let directory = crate::stream::audio_directory(&app)?;
+    if let Some((file, kind)) = crate::stream::cached_file(&directory, "qishui", &id) {
+        return Ok(json!({ "path": file.to_string_lossy(), "kind": kind, "cached": true }));
     }
 
+    let (url, backup) = addresses(&app, &id, cookie.as_deref()).await?;
+    let name = crate::stream::cache_name("qishui", &id);
+    let file = crate::stream::download(
+        &directory,
+        &name,
+        &[url.as_str(), backup.as_str()],
+        UA_PC,
+        REFERER,
+        "mp4",
+    )
+    .await?;
     Ok(json!({ "path": file.to_string_lossy(), "kind": "mp4" }))
 }
 

@@ -101,10 +101,16 @@ export function toStage(
     const words = splitWords(line.text);
     const weights = words.map((word) => Math.max(1, word.replace(PUNCT, "").length));
     const total = weights.reduce((sum, weight) => sum + weight, 0) || 1;
+    // A sheet gives one time per line. The words are spread over the part of
+    // the span the line is actually sung in, not over the silence that follows
+    // it — otherwise every word trails the voice, and the last word of a line
+    // trails by the most, which reads as the stage being one word behind.
+    const rate = CJK.test(line.text) ? 0.34 : 0.12;
+    const sung = Math.min(span, Math.max(0.9, total * rate));
     let cursor = line.at;
 
     const tokens: Token[] = words.map((word, i) => {
-      const width = (weights[i] / total) * span;
+      const width = (weights[i] / total) * sung;
       const token: Token = { notes: [], word, at: cursor, dur: width };
       cursor += width;
       return token;

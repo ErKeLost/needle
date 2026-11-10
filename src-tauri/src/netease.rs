@@ -14,13 +14,13 @@ use aes::cipher::{block_padding::Pkcs7, BlockEncryptMut, KeyInit};
 use aes::Aes128;
 use md5::{Digest, Md5};
 use serde_json::{json, Value};
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 const SITE: &str = "https://music.163.com";
 const EAPI: &str = "https://interfacepc.music.163.com";
 /// The protocol key shipped inside the upstream desktop client, not a secret.
 const EAPI_KEY: &str = "e82ckenh8dichen8";
-const UA: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15";
+pub(crate) const UA: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15";
 const EAPI_UA: &str = "NeteaseMusic 9.0.90/5038 (iPhone; iOS 16.2; zh_CN)";
 
 static JAR: OnceLock<Mutex<Vec<(String, String)>>> = OnceLock::new();
@@ -104,7 +104,7 @@ fn client() -> Result<reqwest::Client, String> {
         .map_err(|error| format!("无法建立网络连接：{error}"))
 }
 
-fn referer() -> String {
+pub(crate) fn referer() -> String {
     format!("{SITE}/")
 }
 
@@ -295,18 +295,16 @@ pub async fn netease_lyric(id: String) -> Result<Value, String> {
     }))
 }
 
-/// Asks the desktop endpoint for a playable URL and keeps one copy of the
-/// audio in the app cache, so seeking is a local file read.
+/// Asks the desktop endpoint for the sound and keeps one copy of it in the
+/// app cache, so a side that is warmed ahead plays without the network. The
+/// playlist itself does not wait for this: see `stream::audio_open`.
 #[tauri::command]
 pub async fn netease_stream(app: AppHandle, id: String, cookie: Option<String>) -> Result<Value, String> {
-    let directory = cache_directory(&app)?;
-    tokio::fs::create_dir_all(&directory)
-        .await
-        .map_err(|error| format!("无法建立缓存目录：{error}"))?;
+    let directory = crate::stream::audio_directory(&app)?;
 
     // A copy already on this machine plays without asking NetEase anything,
     // which also carries the app through the minutes its risk control refuses.
-    if let Some((file, kind)) = cached(&directory, &id) {
+    if let Some((file, kind)) = crate::stream::cached_file(&directory, "netease", &id) {
         return Ok(json!({
             "path": file.to_string_lossy(),
             "kind": kind,
@@ -314,32 +312,8 @@ pub async fn netease_stream(app: AppHandle, id: String, cookie: Option<String>) 
         }));
     }
 
-    let (url, kind) = resolve_stream(&id, cookie.as_deref()).await?;
-    let file = directory.join(format!("{id}.{kind}"));
-
-    let bytes = client()?
-        .get(&url)
-        .header("Referer", referer())
-        .send()
-        .await
-        .map_err(|error| format!("音频下载失败：{error}"))?
-        .error_for_status()
-        .map_err(|error| format!("音频下载失败：{error}"))?
-        .bytes()
-        .await
-        .map_err(|error| format!("音频读取失败：{error}"))?;
-    if bytes.len() < 32 * 1024 {
-        return Err("网易云只返回了空音频".into());
-    }
-    // Write beside the target first: a half download must not look cached.
-    let partial = file.with_extension(format!("{kind}.part"));
-    tokio::fs::write(&partial, &bytes)
-        .await
-        .map_err(|error| format!("无法写入缓存：{error}"))?;
-    tokio::fs::rename(&partial, &file)
-        .await
-        .map_err(|error| format!("无法完成缓存：{error}"))?;
-
+    let (url, kind) = resolve(&id, cookie.as_deref()).await?;
+    let file = crate::stream::download(&directory, &id, &[&url], UA, &referer(), &kind).await?;
     Ok(json!({
         "path": file.to_string_lossy(),
         "kind": kind,
@@ -347,21 +321,11 @@ pub async fn netease_stream(app: AppHandle, id: String, cookie: Option<String>) 
     }))
 }
 
-/// A complete cached file for a song id, whatever container it came in.
-fn cached(directory: &std::path::Path, id: &str) -> Option<(std::path::PathBuf, String)> {
-    for kind in ["mp3", "flac", "ogg"] {
-        let file = directory.join(format!("{id}.{kind}"));
-        if std::fs::metadata(&file).map(|meta| meta.len() > 32 * 1024).unwrap_or(false) {
-            return Some((file, kind.to_string()));
-        }
-    }
-    None
-}
-
-/// The playable address and container for a song id. NetEase hands out
-/// trial clips for some quality tiers and full files for others, and its risk
-/// control can refuse a single tier for a moment, so each is tried in turn.
-async fn resolve_stream(id: &str, cookie: Option<&str>) -> Result<(String, String), String> {
+/// The playable address and container for a song id, checked with two bytes
+/// so a level this account cannot have is skipped here rather than in the
+/// player. NetEase hands out trial clips for some tiers and its risk control
+/// can refuse a single tier for a moment, so each is tried in turn.
+pub(crate) async fn resolve(id: &str, cookie: Option<&str>) -> Result<(String, String), String> {
     let mut last = "网易云没有给出这首歌的播放地址".to_string();
 
     for level in ["exhigh", "higher", "standard"] {
@@ -402,19 +366,18 @@ async fn resolve_stream(id: &str, cookie: Option<&str>) -> Result<(String, Strin
             .and_then(Value::as_str)
             .unwrap_or("mp3")
             .to_lowercase();
-        return Ok((url.to_string(), kind));
+        match crate::stream::probe(&url, UA, &referer()).await {
+            Ok(()) => return Ok((url.to_string(), kind)),
+            Err(error) => {
+                last = error;
+                continue;
+            }
+        }
     }
 
     Err(last)
 }
 
-fn cache_directory(app: &AppHandle) -> Result<PathBuf, String> {
-    let base = app
-        .path()
-        .app_cache_dir()
-        .map_err(|error| format!("无法定位缓存目录：{error}"))?;
-    Ok(base.join("audio"))
-}
 
 /// One `eapi` call: the path and the JSON body are joined with a fixed
 /// separator, hashed, AES-ECB encrypted and posted as `params`.
@@ -571,7 +534,7 @@ mod tests {
     #[tokio::test]
     #[ignore]
     async fn resolves_and_downloads_a_playable_file() {
-        let (url, kind) = resolve_stream("2668397359", None).await.unwrap();
+        let (url, kind) = resolve("2668397359", None).await.unwrap();
         assert!(url.starts_with("http"));
         assert!(kind == "mp3" || kind == "flac");
         let response = client().unwrap().get(&url).header("Referer", referer()).send().await.unwrap();
@@ -579,6 +542,32 @@ mod tests {
         let bytes = response.bytes().await.unwrap();
         assert!(bytes.len() > 1_000_000, "only got {} bytes", bytes.len());
         assert_eq!(&bytes[0..3], b"ID3");
+    }
+
+    /// Seeking streams from the middle, which only works if the CDN answers a
+    /// byte range with 206 and exactly that many bytes.
+    #[tokio::test]
+    #[ignore]
+    async fn serves_a_byte_range_in_the_middle() {
+        let (url, _kind) = resolve("2668397359", None).await.unwrap();
+        let response = crate::stream::client()
+            .get(&url)
+            .header("Range", "bytes=1048576-1049599")
+            .header("Referer", referer())
+            .header("User-Agent", UA)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status().as_u16(), 206);
+        let range = response
+            .headers()
+            .get("content-range")
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
+        assert!(range.starts_with("bytes 1048576-1049599/"), "{range}");
+        assert_eq!(response.bytes().await.unwrap().len(), 1024);
     }
 }
 

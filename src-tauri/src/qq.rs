@@ -3,13 +3,12 @@
 //! need a subscription come back without a URL, and are reported as such
 //! rather than played as a preview of something else.
 
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
-const UA: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15";
-const YQQ: &str = "https://y.qq.com/";
+pub(crate) const UA: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15";
+pub(crate) const YQQ: &str = "https://y.qq.com/";
 const SEARCH: &str = "https://c.y.qq.com/soso/fcgi-bin/client_search_cp";
 const LYRIC: &str = "https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg";
 const MUSICU: &str = "https://u.y.qq.com/cgi-bin/musicu.fcg";
@@ -151,26 +150,17 @@ pub async fn qq_lyric(id: String) -> Result<Value, String> {
     }))
 }
 
-#[tauri::command]
-pub async fn qq_stream(
-    app: AppHandle,
-    id: String,
-    media: Option<String>,
-    session: Option<String>,
-) -> Result<Value, String> {
-    let directory = cache_file(&app, &id, "m4a")?
-        .parent()
-        .map(|path| path.to_path_buf())
-        .ok_or_else(|| "无法定位缓存目录".to_string())?;
-    for kind in ["flac", "mp3", "m4a"] {
-        let file = directory.join(format!("qq-{id}.{kind}"));
-        if std::fs::metadata(&file).map(|meta| meta.len() > 16 * 1024).unwrap_or(false) {
-            return Ok(json!({ "path": file.to_string_lossy(), "kind": kind, "cached": true }));
-        }
-    }
-
+/// Ask for the sound that will be played, or downloaded ahead of the hand.
+/// The chain is the one the MyGo plugin walks: lossless, 320, 128, m4a. Each
+/// candidate is asked for two bytes first, so a tier this account cannot have
+/// is skipped here rather than surfacing in the player as a broken side.
+pub(crate) async fn resolve(
+    id: &str,
+    media: Option<&str>,
+    session: Option<&str>,
+) -> Result<(String, String), String> {
     let session: Value = serde_json::from_str(
-        session.as_deref().filter(|value| !value.trim().is_empty()).ok_or_else(|| {
+        session.filter(|value| !value.trim().is_empty()).ok_or_else(|| {
             "QQ 音乐要登录才给音频：点 QQ 音乐扫一次码".to_string()
         })?,
     )
@@ -195,7 +185,7 @@ pub async fn qq_stream(
 
     // Charts only carry the songmid; the file name needs the media mid, so ask
     // trackInfo when the caller did not know it.
-    let mut uid = media.filter(|value| !value.is_empty()).unwrap_or_else(|| id.clone());
+    let mut uid = media.filter(|value| !value.is_empty()).unwrap_or(id).to_string();
     let g_tk = hash33(&key, 5381);
     if uid == id {
         let payload = json!({
@@ -209,7 +199,7 @@ pub async fn qq_stream(
             "req_0": {
                 "module": "music.trackInfo.UniformRuleCtrl",
                 "method": "CgiGetTrackInfo",
-                "param": { "ids": [id.clone()], "types": [0] }
+                "param": { "ids": [id], "types": [0] }
             }
         });
         if let Ok(answer) = client()?
@@ -253,7 +243,7 @@ pub async fn qq_stream(
                 "module": "music.vkey.GetVkey",
                 "method": "UrlGetVkey",
                 "param": {
-                    "guid": guid(), "songmid": [id.clone()], "songtype": [0],
+                    "guid": guid(), "songmid": [id], "songtype": [0],
                     "uin": uin, "loginflag": 1, "platform": "20",
                     "filename": [filename],
                 }
@@ -305,44 +295,37 @@ pub async fn qq_stream(
             sip.trim_end_matches('/'),
             purl.trim_start_matches('/')
         );
-        let file = cache_file(&app, &id, kind)?;
-        let bytes = client()?
-            .get(&url)
-            .header("Referer", YQQ)
-            .send()
-            .await
-            .map_err(|error| format!("音频下载失败：{error}"))?
-            .error_for_status()
-            .map_err(|error| format!("音频下载失败：{error}"))?
-            .bytes()
-            .await
-            .map_err(|error| format!("音频读取失败：{error}"))?;
-        if bytes.len() < 16 * 1024 {
-            last = "QQ 音乐只返回了空音频".into();
-            continue;
+        match crate::stream::probe(&url, UA, YQQ).await {
+            Ok(()) => return Ok((url, kind.to_string())),
+            Err(error) => {
+                last = error;
+                continue;
+            }
         }
-        let partial = file.with_extension(format!("{kind}.part"));
-        tokio::fs::write(&partial, &bytes)
-            .await
-            .map_err(|error| format!("无法写入缓存：{error}"))?;
-        tokio::fs::rename(&partial, &file)
-            .await
-            .map_err(|error| format!("无法完成缓存：{error}"))?;
-        return Ok(json!({ "path": file.to_string_lossy(), "kind": kind }));
     }
 
     Err(last)
 }
 
-fn cache_file(app: &AppHandle, mid: &str, kind: &str) -> Result<std::path::PathBuf, String> {
-    let base = app
-        .path()
-        .app_cache_dir()
-        .map_err(|error| format!("无法定位缓存目录：{error}"))?;
-    let directory = base.join("audio");
-    std::fs::create_dir_all(&directory).map_err(|error| format!("无法建立缓存目录：{error}"))?;
-    Ok(directory.join(format!("qq-{mid}.{kind}")))
+/// The side itself, fetched whole: what a source is asked to warm ahead of the
+/// hand. Playback takes the streaming path in `stream::audio_open`.
+#[tauri::command]
+pub async fn qq_stream(
+    app: AppHandle,
+    id: String,
+    media: Option<String>,
+    session: Option<String>,
+) -> Result<Value, String> {
+    let directory = crate::stream::audio_directory(&app)?;
+    if let Some((file, kind)) = crate::stream::cached_file(&directory, "qq", &id) {
+        return Ok(json!({ "path": file.to_string_lossy(), "kind": kind, "cached": true }));
+    }
+    let (url, kind) = resolve(&id, media.as_deref(), session.as_deref()).await?;
+    let name = crate::stream::cache_name("qq", &id);
+    let file = crate::stream::download(&directory, &name, &[&url], UA, YQQ, &kind).await?;
+    Ok(json!({ "path": file.to_string_lossy(), "kind": kind }))
 }
+
 
 /// The QQ Music charts, and one of them as queueable tracks.
 #[tauri::command]

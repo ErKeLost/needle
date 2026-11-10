@@ -1,7 +1,8 @@
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 import { parseLrc, toStage } from "../music/lrc";
 import type { MusicSource, Track } from "../music/types";
 import { inTauri } from "./local";
+import { openAudio } from "./open";
 
 /**
  * NetEase Cloud Music. The desktop build asks Rust, which signs the encrypted
@@ -110,14 +111,16 @@ export const neteaseSource: MusicSource = {
 
   async stream(track, options) {
     if (!inTauri()) throw new Error("网易云播放需要桌面版");
-    const answer = await invoke<{ path: string; kind: string }>("netease_stream", {
+    return openAudio("netease", track.id.replace(/^ne-/, ""), track, options);
+  },
+
+  /** Fetch the whole side into the cache, for the tracks after this one. */
+  async warm(track, options) {
+    if (!inTauri()) return;
+    await invoke("netease_stream", {
       id: track.id.replace(/^ne-/, ""),
       cookie: options?.cookie ?? null,
     });
-    return {
-      audio: { kind: "url", url: convertFileSrc(answer.path) },
-      duration: track.duration,
-    };
   },
 
   async lyrics(track) {

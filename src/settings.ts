@@ -11,6 +11,10 @@ export type Settings = {
   lyricScale: number;
   /** Stacked lines above and below are blurred back out of focus. */
   neighborBlur: boolean;
+  /** The sheet fans around the platter instead of stacking flat. */
+  curve: boolean;
+  /** How wide the fan opens, as a multiple of the record's own angle. */
+  lyricTilt: number;
   /** How the word being sung is marked. */
   highlight: "underline" | "pill";
   /** Start the built-in side as soon as the window opens. */
@@ -25,6 +29,8 @@ const DEFAULTS: Settings = {
   label: "art",
   lyricScale: 1,
   neighborBlur: true,
+  curve: true,
+  lyricTilt: 1.6,
   highlight: "underline",
   autoplay: false,
   enabled: { session: true, local: true, netease: true, qq: true },

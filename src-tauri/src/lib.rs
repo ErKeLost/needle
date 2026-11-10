@@ -8,6 +8,7 @@ mod qishui_login;
 mod qq_login;
 mod qq;
 
+mod stream;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -16,6 +17,11 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
             netease::init(app.handle());
+            // The player streams through a loopback port, because a WebView
+            // cannot carry the Referer these CDNs insist on.
+            if let Err(error) = stream::start(app.handle()) {
+                eprintln!("音频端口没打开：{error}");
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -26,6 +32,7 @@ pub fn run() {
             netease::netease_charts,
             netease::netease_lyric,
             netease::netease_stream,
+            stream::audio_open,
             qq::qq_search,
             qq::qq_lyric,
             qq::qq_stream,

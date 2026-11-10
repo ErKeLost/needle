@@ -1,7 +1,8 @@
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 import { parseLrc, toStage } from "../music/lrc";
 import type { MusicSource, Track } from "../music/types";
 import { inTauri } from "./local";
+import { openAudio } from "./open";
 
 /**
  * QQ Music, anonymously. Search and lyrics are open; playback goes through the
@@ -96,15 +97,20 @@ export const qqSource: MusicSource = {
 
   async stream(track, options) {
     if (!inTauri()) throw new Error("QQ 音乐播放需要桌面版");
-    const answer = await invoke<{ path: string; kind: string }>("qq_stream", {
+    return openAudio("qq", track.id.replace(/^qq-/, ""), track, {
+      cookie: options?.cookie,
+      media: track.mediaMid,
+    });
+  },
+
+  /** Fetch the whole side into the cache, for the tracks after this one. */
+  async warm(track, options) {
+    if (!inTauri()) return;
+    await invoke("qq_stream", {
       id: track.id.replace(/^qq-/, ""),
       media: track.mediaMid ?? null,
       session: options?.cookie ?? null,
     });
-    return {
-      audio: { kind: "url", url: convertFileSrc(answer.path) },
-      duration: track.duration,
-    };
   },
 
   async lyrics(track) {

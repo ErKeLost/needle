@@ -75,5 +75,7 @@ export type MusicSource = {
   /** What to put on the platter when nothing was played yet. */
   chart?(limit?: number): Promise<Track[]>;
   stream(track: Track, options?: { cookie?: string }): Promise<Stream>;
+  /** Fetch a whole side into the cache so the next press needs no network. */
+  warm?(track: Track, options?: { cookie?: string }): Promise<void>;
   lyrics?(track: Track): Promise<StageLine[]>;
 };
