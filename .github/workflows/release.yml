@@ -54,10 +54,6 @@ jobs:
 
       - run: npm ci
 
-      - name: Drop the Soda signer notice
-        if: always()
-        run: echo "src-tauri/resources/qishui is not in the repo; Soda playback needs it locally."
-
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -102,7 +98,8 @@ jobs:
 
       - name: NDK and Rust targets
         run: |
-          sdkmanager "ndk;27.0.12077973" "platforms;android-34" "build-tools;34.0.0"
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager --install "ndk;27.0.12077973" "platforms;android-34" "build-tools;34.0.0"
           echo "NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> $GITHUB_ENV
           rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
 
