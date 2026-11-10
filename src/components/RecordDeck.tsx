@@ -33,6 +33,32 @@ const ticks = Array.from({ length: 91 }, (_, i) => {
 export function RecordDeck({ playing, progress, onToggle, title, artwork, palette, spin }: Props) {
   const dot = useMemo(() => polar(ARC_START + ARC_SWEEP * progress, 50.6), [progress]);
 
+  // Show the disc only once its photograph is decoded and its colours are
+  // known, so it cannot appear in three different states on the way in.
+  const [loaded, setLoaded] = useState(false);
+  const [pressedFor, setPressedFor] = useState<string | undefined>(artwork);
+
+  useEffect(() => {
+    const image = new Image();
+    const settle = () => setLoaded(true);
+    image.onload = settle;
+    image.src = "/vinyl.jpg";
+    if (image.complete) settle();
+  }, []);
+
+  useEffect(() => {
+    if (artwork === pressedFor) return;
+    setPressedFor(artwork);
+    setLoaded(false);
+    const image = new Image();
+    const settle = () => setLoaded(true);
+    image.onload = settle;
+    image.src = "/vinyl.jpg";
+    if (image.complete) settle();
+  }, [artwork, pressedFor]);
+
+  const ready = loaded && (!artwork || Boolean(palette?.length));
+
   return (
     <div className="deck">
       <div className="halo" aria-hidden>
