@@ -36,8 +36,9 @@ export function RecordDeck({ playing, progress, onToggle, title, artwork, palett
   // Show the disc only once its photograph is decoded and its colours are
   // known, so it cannot appear in three different states on the way in.
   const [loaded, setLoaded] = useState(false);
-  const [pressedFor, setPressedFor] = useState<string | undefined>(artwork);
 
+  // The pressing photograph is one file; decode it once, then every cover only
+  // changes the dye on top.
   useEffect(() => {
     const image = new Image();
     const settle = () => setLoaded(true);
@@ -45,17 +46,6 @@ export function RecordDeck({ playing, progress, onToggle, title, artwork, palett
     image.src = "/vinyl.jpg";
     if (image.complete) settle();
   }, []);
-
-  useEffect(() => {
-    if (artwork === pressedFor) return;
-    setPressedFor(artwork);
-    setLoaded(false);
-    const image = new Image();
-    const settle = () => setLoaded(true);
-    image.onload = settle;
-    image.src = "/vinyl.jpg";
-    if (image.complete) settle();
-  }, [artwork, pressedFor]);
 
   const ready = loaded && (!artwork || Boolean(palette?.length));
 

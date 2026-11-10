@@ -2929,3 +2929,8 @@ kbd {
 .disc[data-ready="true"] {
   opacity: 1;
 }
+
+/* One fade in, no second transition once the dye is on. */
+.disc__tint {
+  animation: none;
+}
