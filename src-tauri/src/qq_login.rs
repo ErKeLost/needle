@@ -367,6 +367,107 @@ mod tests {
 /// Who the musicid belongs to, for the corner of the player.
 #[tauri::command]
 pub async fn qq_profile(app: tauri::AppHandle, cookie: String) -> Result<Value, String> {
+    let session: Value = serde_json::from_str(&cookie).unwrap_or(Value::Null);
+    let uin = session
+        .get("musicid")
+        .map(|value| value.to_string().trim_matches('"').to_string())
+        .or_else(|| {
+            cookie.split(';').find_map(|part| {
+                let (key, value) = part.trim().split_once('=')?;
+                (key == "uin").then(|| value.trim_start_matches('o').to_string())
+            })
+        })
+        .ok_or_else(|| "登录信息里没有 uin".to_string())?;
+    let key = session.get("musickey").and_then(Value::as_str).unwrap_or("");
+    let name = session.get("name").and_then(Value::as_str).unwrap_or("");
+
+    // cgi() in the plugin: same cookie as playback and a g_tk on the query.
+    let mut url = format!(
+        "https://c.y.qq.com/rsc/fcgi-bin/fcg_get_profile_homepage.fcg?format=json&cid=205360838&userid={uin}&reqfrom=1"
+    );
+    if !key.is_empty() {
+        url.push_str(&format!("&g_tk={}", hash33(key, 5381)));
+    }
+    let mut request = reqwest::Client::builder()
+        .user_agent(UA)
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|error| error.to_string())?
+        .get(url)
+        .header("Referer", "https://y.qq.com/");
+    if !key.is_empty() {
+        request = request.header(
+            "Cookie",
+            format!("uin=o{uin}; qm_keystones={key}; qqmusic_key={key}"),
+        );
+    }
+    let body: Value = request
+        .send()
+        .await
+        .map_err(|error| format!("QQ 连不上：{error}"))?
+        .json()
+        .await
+        .map_err(|error| format!("QQ 返回了无效数据：{error}"))?;
+
+    qq_log(&format!("profile body={}", body.to_string().chars().take(200).collect::<String>()));
+
+    let creator = body.pointer("/data/creator").cloned().unwrap_or(Value::Null);
+    let nickname = creator
+        .get("nick")
+        .or_else(|| creator.get("name"))
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(name);
+
+    if nickname.is_empty() {
+        return Err("QQ 登录已失效，重新扫一次".into());
+    }
+    Ok(json!({
+        "name": nickname,
+        "avatar": creator.get("headpic").and_then(Value::as_str).unwrap_or(""),
+    }))
+}
+
+fn qq_log(line: &str) {
+    let home = std::env::var("HOME").unwrap_or_default();
+    let dir = std::path::PathBuf::from(home)
+        .join("Library/Application Support/app.needle.player");
+    let _ = std::fs::create_dir_all(&dir);
+    use std::io::Write;
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(dir.join("qq-login.log"))
+    {
+        let _ = writeln!(file, "{line}");
+    }
+}
+
+fn device_id() -> String {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    std::env::var("USER").unwrap_or_default().hash(&mut hasher);
+    let value = hasher.finish() % 10_000_000_000;
+    format!("{value:010}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    #[ignore]
+    async fn creates_and_polls_a_qr() {
+        let created = qq_qr_create().await.unwrap();
+        assert!(created["png"].as_array().map(|bytes| bytes.len() > 200).unwrap_or(false));
+        let status = qq_qr_poll().await.unwrap();
+        assert!(matches!(status["code"].as_str().unwrap_or(""), "65" | "66" | "67" | "0"));
+    }
+}
+
+/// Who the musicid belongs to, for the corner of the player.
+#[tauri::command]
+pub async fn qq_profile(app: tauri::AppHandle, cookie: String) -> Result<Value, String> {
     let uin = serde_json::from_str::<Value>(&cookie)
         .ok()
         .and_then(|session| {
