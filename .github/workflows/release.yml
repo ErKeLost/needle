@@ -16,8 +16,6 @@ jobs:
         include:
           - platform: macos-14
             target: aarch64-apple-darwin
-          - platform: macos-14
-            target: x86_64-apple-darwin
           - platform: ubuntu-22.04
             target: ""
           - platform: windows-latest
@@ -59,19 +57,66 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "Needle ${{ github.ref_name }}"
           releaseBody: |
             A vinyl-first music player for the desktop.
 
-            - macOS: `.dmg` (Apple Silicon and Intel)
+            - macOS: `.dmg` (Apple Silicon)
             - Windows: `.msi` / setup `.exe`
             - Linux: `.AppImage` / `.deb`
 
             Soda Music playback needs `src-tauri/resources/qishui`, which is
             not redistributed; search, lyrics and the other sources work
             without it.
+          includeUpdaterJson: true
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.target != '' && format('--target {0}', matrix.target) || '' }}
+
+  android:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+
+      - name: NDK and Rust targets
+        run: |
+          sdkmanager "ndk;27.0.12077973" "platforms;android-34" "build-tools;34.0.0"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> $GITHUB_ENV
+          rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+
+      - run: npm ci
+
+      - name: Build the APK
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          npx tauri android init
+          npx tauri android build --apk
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          tag_name: ${{ github.ref_name }}
+          name: "Needle ${{ github.ref_name }}"
+          files: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
