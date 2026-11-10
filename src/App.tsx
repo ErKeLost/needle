@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { ChordLane } from "./components/ChordLane";
 import { RecordDeck } from "./components/RecordDeck";
+import { LibraryDrawer } from "./components/LibraryDrawer";
 import { LoginPanel } from "./components/LoginPanel";
 import { SearchPanel } from "./components/SearchPanel";
 import { SettingsView } from "./components/SettingsView";
@@ -9,7 +10,9 @@ import { SourceMenu } from "./components/SourceMenu";
 import { TransportBar } from "./components/TransportBar";
 import { Transport } from "./audio/transport";
 import type { MusicSource, Track } from "./music/types";
-import { useAccounts } from "./accounts";
+import { invoke } from "@tauri-apps/api/core";
+import { useAccounts, useProfiles } from "./accounts";
+import { runUpdate, type UpdateState } from "./updater";
 import { useSettings } from "./settings";
 import { adoptBrowserFiles, inTauri, localSource, pickFiles } from "./sources/local";
 import { neteaseSource } from "./sources/netease";
@@ -56,11 +59,13 @@ export default function App() {
   const allSources = useMemo(() => musicSources(), []);
   const { settings, update } = useSettings();
   const { accounts, setAccount } = useAccounts();
+  const { profiles, setProfile } = useProfiles();
   const accountsRef = useRef(accounts);
   accountsRef.current = accounts;
 
   const [view, setView] = useState<"playing" | "settings">("playing");
   const [source, setSource] = useState<MusicSource>(neteaseSource);
+  const [selectedId, setSelectedId] = useState("netease");
   const [track, setTrack] = useState<Track>(PLACEHOLDER);
   const [queue, setQueue] = useState<Track[]>([]);
   const [localCount, setLocalCount] = useState(0);
@@ -71,7 +76,23 @@ export default function App() {
   const [dropping, setDropping] = useState(false);
   const [searchSource, setSearchSource] = useState<MusicSource | null>(null);
   const [login, setLogin] = useState<{ id: string; after?: MusicSource } | null>(null);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [updateNote, setUpdateNote] = useState<string | null>(null);
+
+  // One quiet check per launch; a newer release installs itself and restarts.
+  useEffect(() => {
+    if (!inTauri()) return;
+    const timer = window.setTimeout(() => {
+      void runUpdate((state: UpdateState, version?: string) => {
+        if (state === "downloading") setUpdateNote(`Updating to ${version ?? "a new release"}…`);
+        if (state === "ready") setUpdateNote("Restarting into the new release…");
+        if (state === "none" || state === "error") setUpdateNote(null);
+      });
+    }, 4000);
+    return () => window.clearTimeout(timer);
+  }, []);
   const [problem, setProblem] = useState<string | null>(null);
+  const [vinylColors, setVinylColors] = useState<string[]>([]);
   const openToken = useRef(0);
 
   const sources = useMemo(() => {
@@ -80,7 +101,7 @@ export default function App() {
   }, [allSources, settings.enabled]);
 
   const load = useCallback(
-    async (next: Track, from: MusicSource, remember = true): Promise<boolean> => {
+    async (next: Track, from: MusicSource, remember = true, play = false): Promise<boolean> => {
       const token = ++openToken.current;
       transport.pause();
       setPlaying(false);
@@ -88,6 +109,7 @@ export default function App() {
       setReady(false);
       setTrack(next);
       setSource(from);
+      setSelectedId(from.id);
       setDuration(next.duration);
       setProblem(null);
       try {
@@ -105,6 +127,10 @@ export default function App() {
         setDuration(transport.duration || next.duration);
         setReady(true);
         if (remember) writeLast(from.id, next);
+        if (play) {
+          await transport.play();
+          setPlaying(transport.isPlaying);
+        }
         return true;
       } catch (error) {
         if (token !== openToken.current) return false;
@@ -119,10 +145,20 @@ export default function App() {
     [transport],
   );
 
+  // The queue moves on by itself when a side ends; the callbacks read the
+  // newest queue through refs so they never advance to a stale track.
+  const queueRef = useRef(queue);
+  queueRef.current = queue;
+  const stepRef = useRef<(direction: 1 | -1) => void>(() => undefined);
+
   useEffect(() => {
     transport.onEnded = () => {
-      setPlaying(false);
       setTime(transport.duration);
+      if (queueRef.current.length > 1) {
+        stepRef.current(1);
+      } else {
+        setPlaying(false);
+      }
     };
     transport.onError = (message) => setProblem(message);
 
@@ -160,6 +196,38 @@ export default function App() {
   useEffect(() => {
     transport.setVolume(settings.volume);
   }, [settings.volume, transport]);
+
+  // Each cover presses its own colour into the vinyl.
+  useEffect(() => {
+    if (!track.artwork) {
+      setVinylColors([]);
+      return;
+    }
+    let alive = true;
+    void invoke<{ colors: string[] }>("cover_palette", { url: track.artwork })
+      .then((answer) => alive && setVinylColors(answer.colors))
+      .catch(() => alive && setVinylColors([]));
+    return () => {
+      alive = false;
+    };
+  }, [track.artwork]);
+
+  // A stored cookie is enough to ask who it belongs to.
+  useEffect(() => {
+    if (!inTauri()) return;
+    const commands: Record<string, string> = {
+      netease: "netease_profile",
+      qq: "qq_profile",
+      qishui: "qishui_profile",
+    };
+    for (const [id, command] of Object.entries(commands)) {
+      const cookie = accounts[id];
+      if (!cookie || profiles[id]) continue;
+      void invoke<{ name: string; avatar?: string }>(command, { cookie })
+        .then((who) => setProfile(id, { name: who.name, avatar: who.avatar || undefined }))
+        .catch(() => undefined);
+    }
+  }, [accounts, profiles, setProfile]);
 
   // A transient failure is a toast, not a permanent line over the words.
   useEffect(() => {
@@ -227,10 +295,12 @@ export default function App() {
       if (!queue.length) return;
       const index = queue.findIndex((item) => item.id === track.id);
       const next = queue[(index + direction + queue.length) % queue.length];
-      void load(next, source);
+      void load(next, source, true, true);
     },
     [load, queue, source, track.id],
   );
+
+  stepRef.current = step;
 
   // Duration of a local file only arrives with its metadata.
   useEffect(() => {
@@ -253,10 +323,11 @@ export default function App() {
 
   const pickSource = useCallback(
     async (next: MusicSource) => {
+      setSelectedId(next.id);
       if (next.can("search")) {
         // Both of these only hand out audio to a signed-in listener; the QR
         // panel runs the same protocol the official apps do.
-        if (["netease", "qq", "qishui"].includes(next.id) && !accountsRef.current[next.id] && inTauri()) {
+        if (["netease", "qq"].includes(next.id) && !accountsRef.current[next.id] && inTauri()) {
           setLogin({ id: next.id, after: next });
           return;
         }
@@ -339,6 +410,7 @@ export default function App() {
   }, [toggle, seek, step, openFiles, time, duration, view, searchSource]);
 
   const progress = duration > 0 ? Math.min(1, Math.max(0, time / duration)) : 0;
+  const empty = track.id === "nothing";
 
   const palette = searchSource ? (
     <SearchPanel
@@ -348,7 +420,7 @@ export default function App() {
         setSearchSource(null);
         setView("playing");
         setQueue(hits);
-        void load(next, searchSource);
+        void load(next, searchSource, true, true);
       }}
     />
   ) : null;
@@ -360,6 +432,16 @@ export default function App() {
       onDone={(cookie) => {
         setAccount(login.id, cookie);
         accountsRef.current = { ...accountsRef.current, [login.id]: cookie };
+        const command = {
+          netease: "netease_profile",
+          qq: "qq_profile",
+          qishui: "qishui_profile",
+        }[login.id];
+        if (command) {
+          void invoke<{ name: string; avatar?: string }>(command, { cookie })
+            .then((who) => setProfile(login.id, { name: who.name, avatar: who.avatar || undefined }))
+            .catch(() => undefined);
+        }
         if (login.after) setSearchSource(login.after);
         setLogin(null);
       }}
@@ -400,7 +482,13 @@ export default function App() {
         data-dropping={dropping}
         data-blur={settings.neighborBlur ? "on" : "off"}
         data-highlight={settings.highlight}
-        style={{ "--lyric-scale": settings.lyricScale } as CSSProperties}
+        style={
+          {
+            "--lyric-scale": settings.lyricScale,
+            "--album-a": vinylColors[0] ?? "var(--ember)",
+            "--album-b": vinylColors[1] ?? "var(--ember)",
+          } as CSSProperties
+        }
         onDragOver={(event) => {
           event.preventDefault();
           setDropping(true);
@@ -430,29 +518,67 @@ export default function App() {
           />
         )}
 
+        {!empty && (
         <RecordDeck
           playing={playing}
           progress={progress}
           onToggle={toggle}
           title={track.title}
           artwork={settings.label === "art" ? track.artwork : undefined}
+          palette={vinylColors}
           spin={settings.spin}
         />
+        )}
 
         <header className="meta">
+          <button
+            type="button"
+            className="library-open"
+            aria-label="Library"
+            onClick={() => setLibraryOpen(true)}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
+              <path d="M4 7h11M4 12h11M4 17h7" strokeLinecap="round" />
+              <path d="M17.5 9.5v8.2a1.9 1.9 0 1 1-1.6-1.9V7l4-1v3" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          {profiles[selectedId] ? (
+            <span className="meta__me">
+              {profiles[selectedId].avatar && <img src={profiles[selectedId].avatar} alt="" />}
+              <span>{profiles[selectedId].name}</span>
+            </span>
+          ) : (
+            ["netease", "qq", "qishui"].includes(selectedId) && (
+              <button
+                type="button"
+                className="meta__signin"
+                onClick={() => setLogin({ id: selectedId })}
+              >
+                未登录
+              </button>
+            )
+          )}
           <SourceMenu
             sources={sources}
-            activeId={source.id}
+            activeId={selectedId}
             onPick={pickSource}
             onOpenFiles={openFiles}
             onSearch={() => setSearchSource(neteaseSource)}
           />
         </header>
 
-        <div className="stage">
-          <ChordLane track={track} time={time} />
-        </div>
+        {empty ? (
+          <div className="empty">
+            <p className="empty__title">Choose a source</p>
+            <p className="empty__hint">⌘K to search · the menu at the top right switches sources</p>
+          </div>
+        ) : (
+          <div className="stage">
+            <ChordLane track={track} time={time} />
+          </div>
+        )}
 
+        {!empty && (
         <TransportBar
           track={track}
           volume={settings.volume}
@@ -467,18 +593,33 @@ export default function App() {
           onSeek={seek}
           onOpenSettings={() => setView("settings")}
         />
+        )}
 
-        {!ready && !problem && (
+        {!empty && !ready && !problem && (
           <div className="notice">
             {source.can("search") ? `Fetching from ${source.name}` : "Cutting the lacquer"}
           </div>
         )}
-        {problem && <div className="notice notice--problem">{problem}</div>}
+        {!empty && problem && <div className="notice notice--problem">{problem}</div>}
+        {updateNote && <div className="notice">{updateNote}</div>}
 
         {dropping && <div className="dropzone" aria-hidden />}
       </main>
       {palette}
       {loginPanel}
+      <LibraryDrawer
+        open={libraryOpen}
+        cookie={accounts[selectedId]}
+        sourceId={selectedId}
+        profile={profiles[selectedId]}
+        onClose={() => setLibraryOpen(false)}
+        onPlay={(tracks, index, sourceId) => {
+          const from = allSources.find((item) => item.id === sourceId) ?? neteaseSource;
+          setQueue(tracks);
+          void load(tracks[index], from, true, true);
+          setLibraryOpen(false);
+        }}
+      />
     </>
   );
 }
