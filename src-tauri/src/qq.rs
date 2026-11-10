@@ -193,8 +193,44 @@ pub async fn qq_stream(
         return Err("QQ 音乐登录已失效，重新扫一次".into());
     }
 
-    let uid = media.filter(|value| !value.is_empty()).unwrap_or_else(|| id.clone());
+    // Charts only carry the songmid; the file name needs the media mid, so ask
+    // trackInfo when the caller did not know it.
+    let mut uid = media.filter(|value| !value.is_empty()).unwrap_or_else(|| id.clone());
     let g_tk = hash33(&key, 5381);
+    if uid == id {
+        let payload = json!({
+            "comm": {
+                "cv": 4747474, "ct": 24, "format": "json",
+                "inCharset": "utf-8", "outCharset": "utf-8", "notice": 0,
+                "platform": "yqq.json", "needNewCode": 1,
+                "uin": uin, "authst": key, "tmeLoginType": login_type,
+                "g_tk": g_tk, "g_tk_new_20200303": g_tk,
+            },
+            "req_0": {
+                "module": "music.trackInfo.UniformRuleCtrl",
+                "method": "CgiGetTrackInfo",
+                "param": { "ids": [id.clone()], "types": [0] }
+            }
+        });
+        if let Ok(answer) = client()?
+            .post(MUSICU)
+            .header("Referer", YQQ)
+            .header("Origin", "https://y.qq.com")
+            .header("Content-Type", "application/json")
+            .body(payload.to_string())
+            .send()
+            .await
+        {
+            if let Ok(body) = answer.json::<Value>().await {
+                if let Some(found) = body
+                    .pointer("/req_0/data/tracks/0/file/media_mid")
+                    .and_then(Value::as_str)
+                {
+                    uid = found.to_string();
+                }
+            }
+        }
+    }
     let mut last = "QQ 音乐没有给出播放地址".to_string();
 
     // The exact chain the MyGo plugin walks: lossless, 320, 128, m4a.
