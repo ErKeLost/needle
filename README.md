@@ -26,6 +26,8 @@ Built with **Tauri 2**, **Vite**, **React**, **HeroUI v3**, **Tailwind 4** and
   marked, audio cache size and clearing, the keyboard map.
 - **Sign-in** — QR in the app, the way the phone apps expect it. No password is
   ever typed here.
+- **Updates** — the app checks GitHub for a newer release on launch, installs it
+  and restarts. Releases are signed with the updater key.
 
 ## Sources
 
@@ -77,8 +79,20 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-`.github/workflows/release.yml` builds macOS (Apple Silicon and Intel),
-Windows and Linux, uploads the bundles and opens a draft release.
+`.github/workflows/release.yml` builds macOS (Apple Silicon only), Windows,
+Linux and an Android APK, uploads the bundles and opens a draft release with
+`latest.json` for the updater.
+
+Signing needs two repository secrets:
+
+```
+TAURI_SIGNING_PRIVATE_KEY           the contents of ~/.tauri/needle.key
+TAURI_SIGNING_PRIVATE_KEY_PASSWORD  its password (empty if none)
+```
+
+The matching public key is already in `src-tauri/tauri.conf.json`; without the
+private key the updater artefact is not produced and installed apps will not
+find an update.
 `.github/workflows/ci.yml` type-checks and builds every push and pull request.
 
 ## Layout
