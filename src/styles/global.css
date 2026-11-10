@@ -2955,3 +2955,39 @@ kbd {
 .disc__tint {
   display: none;
 }
+
+/* The record stays a photograph; the album colour shows in the chrome. */
+.halo__arc {
+  stroke: var(--album-a, var(--ember));
+  transition: stroke 500ms linear;
+}
+
+.halo__dot {
+  fill: var(--album-a, var(--ember));
+  transition: fill 500ms linear;
+}
+
+.halo__arc-track {
+  stroke: color-mix(in srgb, var(--album-a, var(--ember)) 22%, transparent);
+}
+
+.player::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(48% 46% at 22% 44%, color-mix(in srgb, var(--album-a, var(--ember)) 30%, transparent) 0%, transparent 70%);
+  opacity: 0.55;
+  transition: background 600ms linear;
+}
+
+.shimmer {
+  background-image: linear-gradient(
+    105deg,
+    rgba(255, 255, 255, 0) 40%,
+    color-mix(in srgb, var(--album-a, #ffffff) 35%, #ffffff) 50%,
+    rgba(255, 255, 255, 0) 60%
+  );
+}

@@ -6,7 +6,6 @@ type Props = {
   onToggle: () => void;
   title: string;
   artwork?: string;
-  palette?: string[];
   spin: boolean;
 };
 
@@ -30,7 +29,7 @@ const ticks = Array.from({ length: 91 }, (_, i) => {
   };
 });
 
-export function RecordDeck({ playing, progress, onToggle, title, artwork, palette, spin }: Props) {
+export function RecordDeck({ playing, progress, onToggle, title, artwork, spin }: Props) {
   const dot = useMemo(() => polar(ARC_START + ARC_SWEEP * progress, 50.6), [progress]);
 
   return (
@@ -86,17 +85,7 @@ export function RecordDeck({ playing, progress, onToggle, title, artwork, palett
         aria-label={playing ? `Pause ${title}` : `Play ${title}`}
       >
         <span className="disc">
-          <span
-            className={palette && palette.length >= 3 ? "disc__art is-palette" : "disc__art"}
-            style={
-              palette && palette.length >= 3
-                ? {
-                    backgroundImage: `radial-gradient(closest-side at 30% 28%, ${palette[0]}e6 0%, ${palette[0]}00 68%), radial-gradient(closest-side at 72% 74%, ${palette[1]}cc 0%, ${palette[1]}00 70%), radial-gradient(closest-side at 54% 50%, ${palette[2]}99 0%, ${palette[2]}00 78%), linear-gradient(160deg, #0a0810 0%, #050408 100%)`,
-                    backgroundBlendMode: "screen, screen, screen, normal",
-                  }
-                : undefined
-            }
-          />
+          <span className="disc__art" />
           <span className="disc__grooves" />
           <span className="disc__edge" />
           <span

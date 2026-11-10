@@ -445,7 +445,13 @@ export default function App() {
         data-dropping={dropping}
         data-blur={settings.neighborBlur ? "on" : "off"}
         data-highlight={settings.highlight}
-        style={{ "--lyric-scale": settings.lyricScale } as CSSProperties}
+        style={
+          {
+            "--lyric-scale": settings.lyricScale,
+            "--album-a": vinylColors[0] ?? "var(--ember)",
+            "--album-b": vinylColors[1] ?? "var(--ember)",
+          } as CSSProperties
+        }
         onDragOver={(event) => {
           event.preventDefault();
           setDropping(true);
@@ -481,7 +487,6 @@ export default function App() {
           onToggle={toggle}
           title={track.title}
           artwork={settings.label === "art" ? track.artwork : undefined}
-          palette={vinylColors}
           spin={settings.spin}
         />
 
