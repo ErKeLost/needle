@@ -2824,3 +2824,29 @@ kbd {
   filter: blur(4px) saturate(1.15);
   pointer-events: none;
 }
+
+/* Tighter lines, and less work per frame: no live blend mode over a rotating
+   disc, no blur on the two nearest rows. */
+.lane__row {
+  margin-top: -20px;
+  filter: blur(2.6px);
+  transform: translateZ(0);
+}
+
+.lane__row[data-distance="1"] {
+  filter: blur(0.8px);
+}
+
+.lane__row[data-distance="0"] {
+  filter: none;
+}
+
+.disc__art {
+  background-color: #120a12;
+  background-blend-mode: color;
+  will-change: transform;
+}
+
+.disc__tint {
+  display: none;
+}

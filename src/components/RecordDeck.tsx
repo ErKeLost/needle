@@ -86,15 +86,17 @@ export function RecordDeck({ playing, progress, onToggle, title, artwork, palett
         aria-label={playing ? `Pause ${title}` : `Play ${title}`}
       >
         <span className="disc">
-          <span className="disc__art" />
-          {palette && palette.length >= 3 && (
-            <span
-              className="disc__tint"
-              style={{
-                background: `linear-gradient(135deg, ${palette[0]} 0%, ${palette[1]} 52%, ${palette[2]} 100%)`,
-              }}
-            />
-          )}
+          <span
+            className="disc__art"
+            style={
+              palette && palette.length >= 3
+                ? {
+                    backgroundImage: `linear-gradient(135deg, ${palette[0]} 0%, ${palette[1]} 52%, ${palette[2]} 100%), url("/vinyl.jpg")`,
+                    backgroundBlendMode: "color",
+                  }
+                : undefined
+            }
+          />
           <span className="disc__grooves" />
           <span className="disc__edge" />
           <span
