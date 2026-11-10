@@ -14,6 +14,20 @@ const SEARCH: &str = "https://c.y.qq.com/soso/fcgi-bin/client_search_cp";
 const LYRIC: &str = "https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg";
 const MUSICU: &str = "https://u.y.qq.com/cgi-bin/musicu.fcg";
 
+fn qq_log(line: &str) {
+    let home = std::env::var("HOME").unwrap_or_default();
+    let dir = std::path::PathBuf::from(home).join("Library/Application Support/app.needle.player");
+    let _ = std::fs::create_dir_all(&dir);
+    use std::io::Write;
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(dir.join("qq-login.log"))
+    {
+        let _ = writeln!(file, "{line}");
+    }
+}
+
 fn hash33(value: &str, init: u32) -> u32 {
     let mut hash = init;
     for ch in value.chars() {
@@ -229,7 +243,13 @@ pub async fn qq_stream(
             .unwrap_or(Value::Null);
         let purl = text(&info, "purl");
         let result = info.get("result").and_then(Value::as_i64).unwrap_or(0);
+        let tips = text(&info, "tips");
+        qq_log(&format!(
+            "vkey file={filename} purl={} result={result} tips={tips}",
+            purl.len()
+        ));
         if purl.is_empty() || result != 0 {
+            last = format!("QQ 没有给地址（{result} {tips}）");
             continue;
         }
         let sip = answer
