@@ -13,6 +13,7 @@ type Shelf = {
   mine?: boolean;
   liked?: boolean;
   source: "netease" | "qq";
+  kind?: "chart" | "list";
 };
 
 type Answer = { user: { id: string; name: string; avatar: string }; playlists: Shelf[] };
@@ -68,7 +69,8 @@ export function LibraryDrawer({ open, cookie, sourceId, profile, onClose, onPlay
       .catch(() => undefined);
 
     if (cookie) {
-      void invoke<Answer>("netease_library", { cookie })
+      const command = sourceId === "qq" ? "qq_library" : "netease_library";
+      void invoke<Answer>(command, { cookie })
         .then((answer) => alive && setData(answer))
         .catch((problem) => {
           if (alive) setError(typeof problem === "string" ? problem : "读取歌单失败");
@@ -77,7 +79,7 @@ export function LibraryDrawer({ open, cookie, sourceId, profile, onClose, onPlay
     return () => {
       alive = false;
     };
-  }, [open, cookie]);
+  }, [open, cookie, sourceId]);
 
   const openShelf = async (item: Shelf) => {
     if (item.source === "qq" || !cookie) {
@@ -86,13 +88,16 @@ export function LibraryDrawer({ open, cookie, sourceId, profile, onClose, onPlay
     setBusy(item.id);
     setError(null);
     try {
-      const answer =
+      const command =
         item.source === "qq"
-          ? await invoke<{ name: string; tracks: Row[] }>("qq_chart", { id: String(item.id) })
-          : await invoke<{ name: string; tracks: Row[] }>("netease_playlist", {
-              cookie,
-              id: String(item.id),
-            });
+          ? item.kind === "chart"
+            ? "qq_chart"
+            : "qq_playlist"
+          : "netease_playlist";
+      const answer = await invoke<{ name: string; tracks: Row[] }>(command, {
+        cookie: item.source === "qq" ? cookie : cookie,
+        id: String(item.id),
+      });
       setShelf({
         name: answer.name || item.name,
         source: item.source,
@@ -106,7 +111,7 @@ export function LibraryDrawer({ open, cookie, sourceId, profile, onClose, onPlay
   };
 
   const shelves = (data?.playlists ?? [])
-    .map((item) => ({ ...item, source: "netease" as const }))
+    .map((item) => ({ ...item, source: (item.source ?? "netease") as "netease" | "qq" }))
     .sort((a, b) => Number(b.liked) - Number(a.liked));
 
   return (
@@ -188,7 +193,11 @@ export function LibraryDrawer({ open, cookie, sourceId, profile, onClose, onPlay
                   );
                 })}
 
-                {shelves.length > 0 && <p className="drawer__section">{sourceId === "qq" ? "QQ 音乐" : "我的歌单"}</p>}
+                {shelves.length > 0 && (
+                  <p className="drawer__section">
+                    {sourceId === "qq" ? "QQ 音乐 · 我的歌单" : "我的歌单"}
+                  </p>
+                )}
                 {shelves.map((item) => (
                   <ShelfRow key={`${item.source}-${item.id}`} item={item} busy={busy} onOpen={openShelf} />
                 ))}

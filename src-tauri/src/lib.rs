@@ -29,6 +29,8 @@ pub fn run() {
             qq::qq_stream,
             qq::qq_charts,
             qq::qq_chart,
+            qq::qq_library,
+            qq::qq_playlist,
             qishui::qishui_search,
             qishui::qishui_track,
             qishui::qishui_stream,

@@ -397,3 +397,192 @@ pub async fn qq_chart(id: String) -> Result<Value, String> {
         "tracks": tracks,
     }))
 }
+
+/// The listener's QQ shelves: the ones they made and the ones they saved.
+/// `session` is the `{musicid, musickey, loginType}` the QR login produced.
+#[tauri::command]
+pub async fn qq_library(session: String) -> Result<Value, String> {
+    let session: Value = serde_json::from_str(&session)
+        .map_err(|_| "QQ 登录信息读不出来，重新登录一次".to_string())?;
+    let uin = session
+        .get("musicid")
+        .map(|value| value.to_string().trim_matches('"').to_string())
+        .unwrap_or_default();
+    if uin.is_empty() {
+        return Err("QQ 音乐登录已失效，重新扫一次".into());
+    }
+
+    let created: Value = client()?
+        .get("https://c.y.qq.com/rsc/fcgi-bin/fcg_user_created_diss")
+        .query(&[("hostuin", uin.as_str()), ("sin", "0"), ("size", "200"), ("format", "json")])
+        .header("Referer", YQQ)
+        .send()
+        .await
+        .map_err(|error| format!("QQ 音乐连不上：{error}"))?
+        .json()
+        .await
+        .unwrap_or(Value::Null);
+
+    let saved: Value = client()?
+        .get("https://c.y.qq.com/fav/fcgi-bin/fcg_get_profile_order_asset.fcg")
+        .query(&[
+            ("ct", "20"), ("cid", "205360956"), ("userid", uin.as_str()),
+            ("reqtype", "3"), ("sin", "0"), ("ein", "200"), ("format", "json"),
+        ])
+        .header("Referer", YQQ)
+        .send()
+        .await
+        .map_err(|error| format!("QQ 音乐连不上：{error}"))?
+        .json()
+        .await
+        .unwrap_or(Value::Null);
+
+    let mut playlists: Vec<Value> = Vec::new();
+    let created_list = created
+        .pointer("/data/disslist")
+        .or_else(|| created.get("disslist"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    for item in created_list {
+        let tid = item
+            .get("tid")
+            .and_then(Value::as_i64)
+            .unwrap_or(0);
+        if tid == 0 {
+            continue;
+        }
+        let dirid = item.get("dirid").and_then(Value::as_i64).unwrap_or(0);
+        playlists.push(json!({
+            "id": tid,
+            "name": item.get("diss_name").or_else(|| item.get("dissname")).and_then(Value::as_str).unwrap_or(""),
+            "cover": item.get("diss_cover").or_else(|| item.get("logo")).and_then(Value::as_str).unwrap_or("").replace("http://", "https://"),
+            "count": item.get("song_cnt").or_else(|| item.get("songnum")).and_then(Value::as_i64).unwrap_or(0),
+            "mine": true,
+            "liked": dirid == 201,
+            "source": "qq",
+            "kind": "list",
+        }));
+    }
+    let saved_list = saved
+        .pointer("/data/cdlist")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    for item in saved_list {
+        let tid = item.get("dissid").and_then(Value::as_i64).unwrap_or(0);
+        if tid == 0 {
+            continue;
+        }
+        playlists.push(json!({
+            "id": tid,
+            "name": item.get("dissname").and_then(Value::as_str).unwrap_or(""),
+            "cover": item.get("logo").and_then(Value::as_str).unwrap_or("").replace("http://", "https://"),
+            "count": item.get("songnum").and_then(Value::as_i64).unwrap_or(0),
+            "mine": false,
+            "liked": false,
+            "source": "qq",
+            "kind": "list",
+        }));
+    }
+
+    let name = session.get("name").and_then(Value::as_str).unwrap_or("QQ 音乐");
+    Ok(json!({
+        "user": { "id": uin, "name": name, "avatar": "" },
+        "playlists": playlists,
+    }))
+}
+
+/// One QQ shelf, through musicu exactly as the plugin asks for it.
+#[tauri::command]
+pub async fn qq_playlist(session: String, id: String) -> Result<Value, String> {
+    let session: Value = serde_json::from_str(&session)
+        .map_err(|_| "QQ 登录信息读不出来，重新登录一次".to_string())?;
+    let uin = session
+        .get("musicid")
+        .map(|value| value.to_string().trim_matches('"').to_string())
+        .unwrap_or_default();
+    let key = session.get("musickey").and_then(Value::as_str).unwrap_or("");
+    if uin.is_empty() || key.is_empty() {
+        return Err("QQ 音乐登录已失效，重新扫一次".into());
+    }
+    let g_tk = hash33(key, 5381);
+    let login_type = session.get("loginType").and_then(Value::as_u64).unwrap_or(2);
+
+    let payload = json!({
+        "comm": {
+            "cv": 4747474, "ct": 24, "format": "json",
+            "inCharset": "utf-8", "outCharset": "utf-8", "notice": 0,
+            "platform": "yqq.json", "needNewCode": 1,
+            "uin": uin, "authst": key, "tmeLoginType": login_type,
+            "g_tk": g_tk, "g_tk_new_20200303": g_tk,
+        },
+        "req_0": {
+            "module": "music.srfDissInfo.aiDissInfo",
+            "method": "uniform_get_Dissinfo",
+            "param": {
+                "disstid": id.parse::<i64>().unwrap_or(0),
+                "enc_host_uin": "", "tag": 1, "userinfo": 1,
+                "song_begin": 0, "song_num": 1000, "onlysonglist": 0, "orderlist": 1,
+            }
+        }
+    });
+
+    let answer: Value = client()?
+        .post(MUSICU)
+        .header("Referer", YQQ)
+        .header("Origin", "https://y.qq.com")
+        .header("Content-Type", "application/json")
+        .body(payload.to_string())
+        .send()
+        .await
+        .map_err(|error| format!("QQ 音乐连不上：{error}"))?
+        .json()
+        .await
+        .map_err(|error| format!("QQ 音乐返回了无效数据：{error}"))?;
+
+    let songs = answer
+        .pointer("/req_0/data/songlist")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let tracks = songs
+        .iter()
+        .filter_map(|song| {
+            let mid = song.get("mid").or_else(|| song.get("songmid"))?.as_str()?;
+            let album = song
+                .pointer("/album/mid")
+                .or_else(|| song.get("albummid"))
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            let artists = song
+                .get("singer")
+                .and_then(Value::as_array)
+                .map(|list| {
+                    list.iter()
+                        .filter_map(|artist| artist.get("name").and_then(Value::as_str))
+                        .collect::<Vec<_>>()
+                        .join(" / ")
+                })
+                .unwrap_or_default();
+            let media = song
+                .pointer("/file/media_mid")
+                .and_then(Value::as_str)
+                .unwrap_or(mid);
+            Some(json!({
+                "id": mid,
+                "media": media,
+                "name": song.get("name").or_else(|| song.get("title")).and_then(Value::as_str).unwrap_or(""),
+                "artist": artists,
+                "album": song.pointer("/album/name").and_then(Value::as_str).unwrap_or(""),
+                "cover": if album.is_empty() { String::new() } else { format!("https://y.gtimg.cn/music/photo_new/T002R300x300M000{album}.jpg") },
+                "duration": song.get("interval").and_then(Value::as_i64).unwrap_or(0) * 1000,
+            }))
+        })
+        .collect::<Vec<_>>();
+
+    Ok(json!({
+        "name": answer.pointer("/req_0/data/dirinfo/title").and_then(Value::as_str).unwrap_or("QQ 歌单"),
+        "tracks": tracks,
+    }))
+}
