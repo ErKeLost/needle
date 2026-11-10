@@ -2929,3 +2929,29 @@ kbd {
   opacity: 0.82;
   filter: blur(2px) saturate(1.1);
 }
+
+/* A coloured pressing: soft pours of the cover's colours over black, with the
+   grooves and one specular sweep on top. No flat wash. */
+.disc__art.is-palette {
+  filter: saturate(1.15) brightness(0.95) contrast(1.05);
+}
+
+.disc__grooves {
+  opacity: 0.55;
+  background:
+    repeating-radial-gradient(
+      circle at 50% 50%,
+      rgba(255, 255, 255, 0.055) 0 1px,
+      rgba(0, 0, 0, 0.22) 1px 2.4px
+    ),
+    repeating-radial-gradient(
+      circle at 50% 50%,
+      rgba(255, 255, 255, 0.03) 0 1px,
+      rgba(0, 0, 0, 0.16) 1px 6.5px
+    );
+  mix-blend-mode: overlay;
+}
+
+.disc__tint {
+  display: none;
+}
