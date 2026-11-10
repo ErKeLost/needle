@@ -593,3 +593,126 @@ fn device_id() -> String {
     let digest = format!("{:x}", Md5::digest(seed.as_bytes())).to_uppercase();
     digest.repeat(2).chars().take(52).collect()
 }
+
+/// The listener's own shelves: the playlists they made, the ones they saved,
+/// and the liked songs, which NetEase keeps as a playlist of its own.
+#[tauri::command]
+pub async fn netease_library(cookie: String) -> Result<Value, String> {
+    let http = client()?;
+    let account: Value = http
+        .get(format!("{SITE}/api/nuser/account/get"))
+        .header("Referer", referer())
+        .header("Cookie", &cookie)
+        .send()
+        .await
+        .map_err(|error| format!("网易云连不上：{error}"))?
+        .json()
+        .await
+        .map_err(|error| format!("网易云返回了无效数据：{error}"))?;
+
+    let uid = account
+        .pointer("/profile/userId")
+        .map(|value| value.to_string().trim_matches('"').to_string())
+        .unwrap_or_default();
+    if uid.is_empty() {
+        return Err("登录已失效，重新扫一次码".into());
+    }
+
+    let body: Value = http
+        .get(format!("{SITE}/api/user/playlist"))
+        .query(&[("uid", uid.as_str()), ("limit", "100"), ("offset", "0")])
+        .header("Referer", referer())
+        .header("Cookie", &cookie)
+        .send()
+        .await
+        .map_err(|error| format!("网易云连不上：{error}"))?
+        .json()
+        .await
+        .map_err(|error| format!("网易云返回了无效数据：{error}"))?;
+
+    let playlists = body
+        .get("playlist")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|item| {
+            let id = item.get("id")?.as_i64()?;
+            let creator = item
+                .pointer("/creator/userId")
+                .map(|value| value.to_string().trim_matches('"').to_string())
+                .unwrap_or_default();
+            let special = item.get("specialType").and_then(Value::as_i64).unwrap_or(0);
+            Some(json!({
+                "id": id,
+                "name": item.get("name").and_then(Value::as_str).unwrap_or(""),
+                "cover": item.get("coverImgUrl").and_then(Value::as_str).unwrap_or(""),
+                "count": item.get("trackCount").and_then(Value::as_i64).unwrap_or(0),
+                "mine": creator == uid,
+                "liked": special == 5,
+            }))
+        })
+        .collect::<Vec<_>>();
+
+    Ok(json!({
+        "user": {
+            "id": uid,
+            "name": account.pointer("/profile/nickname").and_then(Value::as_str).unwrap_or(""),
+            "avatar": account.pointer("/profile/avatarUrl").and_then(Value::as_str).unwrap_or(""),
+        },
+        "playlists": playlists,
+    }))
+}
+
+/// One shelf, as tracks the player can queue.
+#[tauri::command]
+pub async fn netease_playlist(cookie: String, id: String) -> Result<Value, String> {
+    let body: Value = client()?
+        .get(format!("{SITE}/api/playlist/detail"))
+        .query(&[("id", id.as_str()), ("n", "1000")])
+        .header("Referer", referer())
+        .header("Cookie", cookie)
+        .send()
+        .await
+        .map_err(|error| format!("网易云连不上：{error}"))?
+        .json()
+        .await
+        .map_err(|error| format!("网易云返回了无效数据：{error}"))?;
+
+    let songs = body
+        .pointer("/playlist/tracks")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let tracks = songs
+        .iter()
+        .filter_map(|song| {
+            let id = song.get("id")?.as_i64()?;
+            let artists = song
+                .get("ar")
+                .or_else(|| song.get("artists"))
+                .and_then(Value::as_array)
+                .map(|list| {
+                    list.iter()
+                        .filter_map(|artist| artist.get("name").and_then(Value::as_str))
+                        .collect::<Vec<_>>()
+                        .join(" / ")
+                })
+                .unwrap_or_default();
+            let album = song.get("al").or_else(|| song.get("album")).cloned().unwrap_or(Value::Null);
+            Some(json!({
+                "id": id,
+                "name": song.get("name").and_then(Value::as_str).unwrap_or(""),
+                "artist": artists,
+                "album": text_of(&album, "/name"),
+                "cover": text_of(&album, "/picUrl"),
+                "duration": song.get("dt").or_else(|| song.get("duration")).and_then(Value::as_i64).unwrap_or(0),
+            }))
+        })
+        .collect::<Vec<_>>();
+
+    Ok(json!({
+        "name": body.pointer("/playlist/name").and_then(Value::as_str).unwrap_or(""),
+        "tracks": tracks,
+    }))
+}

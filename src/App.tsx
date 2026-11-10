@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { ChordLane } from "./components/ChordLane";
 import { RecordDeck } from "./components/RecordDeck";
+import { LibraryDrawer } from "./components/LibraryDrawer";
 import { LoginPanel } from "./components/LoginPanel";
 import { SearchPanel } from "./components/SearchPanel";
 import { SettingsView } from "./components/SettingsView";
@@ -73,6 +74,7 @@ export default function App() {
   const [dropping, setDropping] = useState(false);
   const [searchSource, setSearchSource] = useState<MusicSource | null>(null);
   const [login, setLogin] = useState<{ id: string; after?: MusicSource } | null>(null);
+  const [libraryOpen, setLibraryOpen] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [vinylColors, setVinylColors] = useState<string[]>([]);
   const openToken = useRef(0);
@@ -495,6 +497,17 @@ export default function App() {
         )}
 
         <header className="meta">
+          <button
+            type="button"
+            className="library-open"
+            aria-label="Library"
+            onClick={() => setLibraryOpen(true)}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
+              <path d="M4 7h11M4 12h11M4 17h7" strokeLinecap="round" />
+              <path d="M17.5 9.5v8.2a1.9 1.9 0 1 1-1.6-1.9V7l4-1v3" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
           {profiles[source.id] && (
             <span className="meta__me">
               {profiles[source.id].avatar && <img src={profiles[source.id].avatar} alt="" />}
@@ -549,6 +562,16 @@ export default function App() {
       </main>
       {palette}
       {loginPanel}
+      <LibraryDrawer
+        open={libraryOpen}
+        cookie={accounts.netease}
+        onClose={() => setLibraryOpen(false)}
+        onPlay={(tracks) => {
+          setQueue(tracks);
+          void load(tracks[0], neteaseSource);
+          setLibraryOpen(false);
+        }}
+      />
     </>
   );
 }

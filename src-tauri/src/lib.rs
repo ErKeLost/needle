@@ -19,6 +19,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             netease::netease_search,
             netease::netease_chart,
+            netease::netease_library,
+            netease::netease_playlist,
             netease::netease_lyric,
             netease::netease_stream,
             qq::qq_search,

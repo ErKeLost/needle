@@ -85,9 +85,9 @@ mod tests {
 
 /// Who the cookie belongs to, for the corner of the player.
 #[tauri::command]
-pub async fn netease_profile(cookie: String) -> Result<Value, String> {
+pub async fn netease_profile(app: tauri::AppHandle, cookie: String) -> Result<Value, String> {
     let body: Value = client()?
-        .get(format!("{SITE}/api/user/account"))
+        .get(format!("{SITE}/api/nuser/account/get"))
         .header("Referer", format!("{SITE}/"))
         .header("Cookie", cookie)
         .send()
@@ -96,6 +96,18 @@ pub async fn netease_profile(cookie: String) -> Result<Value, String> {
         .json()
         .await
         .map_err(|error| format!("网易云返回了无效数据：{error}"))?;
+
+    if let Ok(dir) = tauri::Manager::path(&app).app_config_dir() {
+        use std::io::Write;
+        let _ = std::fs::create_dir_all(&dir);
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(dir.join("netease-profile.log"))
+        {
+            let _ = writeln!(file, "profile body={body}");
+        }
+    }
 
     let profile = body.get("profile").cloned().unwrap_or(Value::Null);
     let name = profile.get("nickname").and_then(Value::as_str).unwrap_or("");
