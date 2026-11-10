@@ -74,7 +74,7 @@ export default function App() {
   const [searchSource, setSearchSource] = useState<MusicSource | null>(null);
   const [login, setLogin] = useState<{ id: string; after?: MusicSource } | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
-  const [palette, setPalette] = useState<string[]>([]);
+  const [vinylColors, setVinylColors] = useState<string[]>([]);
   const openToken = useRef(0);
 
   const sources = useMemo(() => {
@@ -167,13 +167,13 @@ export default function App() {
   // Each cover presses its own colour into the vinyl.
   useEffect(() => {
     if (!track.artwork) {
-      setPalette([]);
+      setVinylColors([]);
       return;
     }
     let alive = true;
     void invoke<{ colors: string[] }>("cover_palette", { url: track.artwork })
-      .then((answer) => alive && setPalette(answer.colors))
-      .catch(() => alive && setPalette([]));
+      .then((answer) => alive && setVinylColors(answer.colors))
+      .catch(() => alive && setVinylColors([]));
     return () => {
       alive = false;
     };
@@ -481,7 +481,7 @@ export default function App() {
           onToggle={toggle}
           title={track.title}
           artwork={settings.label === "art" ? track.artwork : undefined}
-          palette={palette}
+          palette={vinylColors}
           spin={settings.spin}
         />
 
