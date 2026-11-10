@@ -91,7 +91,7 @@ export function RecordDeck({ playing, progress, onToggle, title, artwork, palett
             <span
               className="disc__tint"
               style={{
-                background: `conic-gradient(from 210deg at 50% 50%, ${palette[0]} 0deg, ${palette[1]} 118deg, ${palette[2]} 236deg, ${palette[0]} 360deg)`,
+                background: `conic-gradient(from 210deg at 50% 50%, ${palette[0]} 0deg, ${palette[0]} 150deg, ${palette[1]} 235deg, ${palette[2]} 320deg, ${palette[0]} 360deg)`,
               }}
             />
           )}
