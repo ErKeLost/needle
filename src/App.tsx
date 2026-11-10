@@ -12,6 +12,7 @@ import { Transport } from "./audio/transport";
 import type { MusicSource, Track } from "./music/types";
 import { invoke } from "@tauri-apps/api/core";
 import { useAccounts, useProfiles } from "./accounts";
+import { runUpdate, type UpdateState } from "./updater";
 import { useSettings } from "./settings";
 import { adoptBrowserFiles, inTauri, localSource, pickFiles } from "./sources/local";
 import { neteaseSource } from "./sources/netease";
@@ -76,6 +77,20 @@ export default function App() {
   const [searchSource, setSearchSource] = useState<MusicSource | null>(null);
   const [login, setLogin] = useState<{ id: string; after?: MusicSource } | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [updateNote, setUpdateNote] = useState<string | null>(null);
+
+  // One quiet check per launch; a newer release installs itself and restarts.
+  useEffect(() => {
+    if (!inTauri()) return;
+    const timer = window.setTimeout(() => {
+      void runUpdate((state: UpdateState, version?: string) => {
+        if (state === "downloading") setUpdateNote(`Updating to ${version ?? "a new release"}…`);
+        if (state === "ready") setUpdateNote("Restarting into the new release…");
+        if (state === "none" || state === "error") setUpdateNote(null);
+      });
+    }, 4000);
+    return () => window.clearTimeout(timer);
+  }, []);
   const [problem, setProblem] = useState<string | null>(null);
   const [vinylColors, setVinylColors] = useState<string[]>([]);
   const openToken = useRef(0);
@@ -586,6 +601,7 @@ export default function App() {
           </div>
         )}
         {!empty && problem && <div className="notice notice--problem">{problem}</div>}
+        {updateNote && <div className="notice">{updateNote}</div>}
 
         {dropping && <div className="dropzone" aria-hidden />}
       </main>
