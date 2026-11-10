@@ -85,7 +85,7 @@ export function RecordDeck({ playing, progress, onToggle, title, artwork, palett
         onClick={onToggle}
         aria-label={playing ? `Pause ${title}` : `Play ${title}`}
       >
-        <span className="disc">
+        <span className="disc" data-ready={ready}>
           <span className="disc__art" />
           {palette && palette.length >= 3 && (
             <span

@@ -2919,3 +2919,13 @@ kbd {
   font-size: 10px;
   color: var(--paper-30);
 }
+
+/* Nothing half-loaded: the platter fades in once the photo and palette are in. */
+.disc {
+  opacity: 0;
+  transition: opacity 260ms var(--ease);
+}
+
+.disc[data-ready="true"] {
+  opacity: 1;
+}
