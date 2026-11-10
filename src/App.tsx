@@ -487,6 +487,7 @@ export default function App() {
           onToggle={toggle}
           title={track.title}
           artwork={settings.label === "art" ? track.artwork : undefined}
+          palette={vinylColors}
           spin={settings.spin}
         />
 

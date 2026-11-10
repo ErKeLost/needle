@@ -2991,3 +2991,16 @@ kbd {
     rgba(255, 255, 255, 0) 60%
   );
 }
+
+/* The pressing follows the cover: the photograph loses its own colour and
+   becomes pure marbling, then the album's gradient dyes it. */
+.disc__art {
+  filter: grayscale(1) brightness(0.92) contrast(1.12);
+}
+
+.disc__tint {
+  display: block;
+  opacity: 0.95;
+  mix-blend-mode: color;
+  filter: none;
+}
