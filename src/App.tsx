@@ -124,10 +124,20 @@ export default function App() {
     [transport],
   );
 
+  // The queue moves on by itself when a side ends; the callbacks read the
+  // newest queue through refs so they never advance to a stale track.
+  const queueRef = useRef(queue);
+  queueRef.current = queue;
+  const stepRef = useRef<(direction: 1 | -1) => void>(() => undefined);
+
   useEffect(() => {
     transport.onEnded = () => {
-      setPlaying(false);
       setTime(transport.duration);
+      if (queueRef.current.length > 1) {
+        stepRef.current(1);
+      } else {
+        setPlaying(false);
+      }
     };
     transport.onError = (message) => setProblem(message);
 
@@ -268,6 +278,8 @@ export default function App() {
     },
     [load, queue, source, track.id],
   );
+
+  stepRef.current = step;
 
   // Duration of a local file only arrives with its metadata.
   useEffect(() => {
