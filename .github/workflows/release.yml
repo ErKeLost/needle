@@ -4,6 +4,10 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Tag to publish, e.g. v0.1.0"
+        required: true
 
 permissions:
   contents: write
@@ -60,8 +64,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "Needle ${{ github.ref_name }}"
+          tagName: ${{ inputs.version || github.ref_name }}
+          releaseName: "Needle ${{ inputs.version || github.ref_name }}"
           releaseBody: |
             A vinyl-first music player for the desktop.
 
@@ -115,7 +119,7 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           draft: true
-          tag_name: ${{ github.ref_name }}
+          tag_name: ${{ inputs.version || github.ref_name }}
           name: "Needle ${{ github.ref_name }}"
           files: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
         env:
