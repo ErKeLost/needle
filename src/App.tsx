@@ -566,9 +566,9 @@ export default function App() {
         open={libraryOpen}
         cookie={accounts.netease}
         onClose={() => setLibraryOpen(false)}
-        onPlay={(tracks) => {
+        onPlay={(tracks, index) => {
           setQueue(tracks);
-          void load(tracks[0], neteaseSource);
+          void load(tracks[index], neteaseSource);
           setLibraryOpen(false);
         }}
       />

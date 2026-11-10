@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { invoke } from "@tauri-apps/api/core";
+import { clock } from "../music/notes";
 import type { Track } from "../music/types";
 
 type Shelf = {
@@ -19,7 +20,7 @@ type Props = {
   open: boolean;
   cookie?: string;
   onClose: () => void;
-  onPlay: (tracks: Track[]) => void;
+  onPlay: (tracks: Track[], index: number) => void;
 };
 
 const asTrack = (row: Row): Track => ({
@@ -38,6 +39,7 @@ export function LibraryDrawer({ open, cookie, onClose, onPlay }: Props) {
   const [data, setData] = useState<Answer | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
+  const [shelf, setShelf] = useState<{ name: string; tracks: Track[] } | null>(null);
 
   useEffect(() => {
     if (!open || !cookie) return;
@@ -53,15 +55,16 @@ export function LibraryDrawer({ open, cookie, onClose, onPlay }: Props) {
     };
   }, [open, cookie]);
 
-  const openShelf = async (shelf: Shelf) => {
+  const openShelf = async (item: Shelf) => {
     if (!cookie) return;
-    setBusy(shelf.id);
+    setBusy(item.id);
+    setError(null);
     try {
-      const answer = await invoke<{ tracks: Row[] }>("netease_playlist", {
+      const answer = await invoke<{ name: string; tracks: Row[] }>("netease_playlist", {
         cookie,
-        id: String(shelf.id),
+        id: String(item.id),
       });
-      if (answer.tracks.length) onPlay(answer.tracks.map(asTrack));
+      setShelf({ name: answer.name || item.name, tracks: answer.tracks.map(asTrack) });
     } catch (problem) {
       setError(typeof problem === "string" ? problem : "打不开这个歌单");
     } finally {
@@ -94,10 +97,19 @@ export function LibraryDrawer({ open, cookie, onClose, onPlay }: Props) {
             transition={{ type: "spring", stiffness: 260, damping: 30 }}
           >
             <header className="drawer__head">
-              <span className="drawer__who">
-                {data?.user.avatar && <img src={data.user.avatar} alt="" />}
-                <span>{data?.user.name || "My library"}</span>
-              </span>
+              {shelf ? (
+                <button type="button" className="drawer__back" onClick={() => setShelf(null)}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+                    <path d="M14 5l-7 7 7 7" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  {shelf.name}
+                </button>
+              ) : (
+                <span className="drawer__who">
+                  {data?.user.avatar && <img src={data.user.avatar} alt="" />}
+                  <span>{data?.user.name || "My library"}</span>
+                </span>
+              )}
               <button type="button" className="drawer__close" onClick={onClose} aria-label="关闭">
                 ✕
               </button>
@@ -107,30 +119,51 @@ export function LibraryDrawer({ open, cookie, onClose, onPlay }: Props) {
             {!data && !error && <p className="drawer__note">读取中…</p>}
             {data && !shelves.length && <p className="drawer__note">还没有歌单</p>}
 
+            {shelf ? (
+              <div className="drawer__list">
+                {shelf.tracks.map((track, index) => (
+                  <button
+                    type="button"
+                    key={track.id}
+                    className="song"
+                    onClick={() => onPlay(shelf.tracks, index)}
+                  >
+                    <span className="song__index">{String(index + 1).padStart(2, "0")}</span>
+                    <span className="song__text">
+                      <span className="song__name">{track.title}</span>
+                      <span className="song__meta">{track.artist}</span>
+                    </span>
+                    <span className="song__time">{clock(track.duration)}</span>
+                  </button>
+                ))}
+                {!shelf.tracks.length && <p className="drawer__note">这个歌单是空的</p>}
+              </div>
+            ) : (
             <div className="drawer__list">
-              {shelves.map((shelf) => (
+              {shelves.map((item) => (
                 <button
                   type="button"
-                  key={shelf.id}
+                  key={item.id}
                   className="shelf"
-                  data-busy={busy === shelf.id}
-                  onClick={() => openShelf(shelf)}
+                  data-busy={busy === item.id}
+                  onClick={() => openShelf(item)}
                 >
                   <span className="shelf__cover">
-                    {shelf.cover ? <img src={shelf.cover.replace(/^http:\/\//, "https://")} alt="" /> : null}
+                    {item.cover ? <img src={item.cover.replace(/^http:\/\//, "https://")} alt="" /> : null}
                   </span>
                   <span className="shelf__text">
                     <span className="shelf__name">
-                      {shelf.liked && <span className="shelf__heart">♥</span>}
-                      {shelf.name}
+                      {item.liked && <span className="shelf__heart">♥</span>}
+                      {item.name}
                     </span>
                     <span className="shelf__meta">
-                      {shelf.liked ? "我喜欢的音乐" : shelf.mine ? "我的歌单" : "收藏"} · {shelf.count} 首
+                      {item.liked ? "我喜欢的音乐" : item.mine ? "我的歌单" : "收藏"} · {item.count} 首
                     </span>
                   </span>
                 </button>
               ))}
             </div>
+            )}
           </motion.aside>
         </>
       )}
