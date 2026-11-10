@@ -29,6 +29,8 @@ type Row = {
 type Props = {
   open: boolean;
   cookie?: string;
+  sourceId: string;
+  profile?: { name: string; avatar?: string };
   onClose: () => void;
   onPlay: (tracks: Track[], index: number, sourceId: string) => void;
 };
@@ -46,7 +48,7 @@ const asTrack = (row: Row, source: "netease" | "qq"): Track => ({
   sourceId: source,
 });
 
-export function LibraryDrawer({ open, cookie, onClose, onPlay }: Props) {
+export function LibraryDrawer({ open, cookie, sourceId, profile, onClose, onPlay }: Props) {
   const [data, setData] = useState<Answer | null>(null);
   const [charts, setCharts] = useState<Shelf[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -139,8 +141,8 @@ export function LibraryDrawer({ open, cookie, onClose, onPlay }: Props) {
                 </button>
               ) : (
                 <span className="drawer__who">
-                  {data?.user.avatar && <img src={data.user.avatar} alt="" />}
-                  <span>{data?.user.name || "My library"}</span>
+                  {profile?.avatar && <img src={profile.avatar} alt="" />}
+                  <span>{profile?.name || "未登录"}</span>
                 </span>
               )}
               <button type="button" className="drawer__close" onClick={onClose} aria-label="关闭">
@@ -171,16 +173,22 @@ export function LibraryDrawer({ open, cookie, onClose, onPlay }: Props) {
               </div>
             ) : (
               <div className="drawer__list">
-                {charts.length > 0 && (
-                  <>
-                    <p className="drawer__section">排行榜</p>
-                    {charts.map((item) => (
-                      <ShelfRow key={`${item.source}-${item.id}`} item={item} busy={busy} onOpen={openShelf} />
-                    ))}
-                  </>
-                )}
+                {(["netease", "qq"] as const).map((source) => {
+                  const group = charts.filter((item) => item.source === source);
+                  if (!group.length) return null;
+                  return (
+                    <div key={source}>
+                      <p className="drawer__section">
+                        {source === "qq" ? "QQ 音乐 · 排行榜" : "网易云音乐 · 排行榜"}
+                      </p>
+                      {group.map((item) => (
+                        <ShelfRow key={`${item.source}-${item.id}`} item={item} busy={busy} onOpen={openShelf} />
+                      ))}
+                    </div>
+                  );
+                })}
 
-                {shelves.length > 0 && <p className="drawer__section">我的歌单</p>}
+                {shelves.length > 0 && <p className="drawer__section">{sourceId === "qq" ? "QQ 音乐" : "我的歌单"}</p>}
                 {shelves.map((item) => (
                   <ShelfRow key={`${item.source}-${item.id}`} item={item} busy={busy} onOpen={openShelf} />
                 ))}
@@ -223,7 +231,7 @@ function ShelfRow({
           {item.liked
             ? "我喜欢的音乐"
             : item.source === "qq"
-              ? `QQ 音乐 · ${item.note ?? ""}`
+              ? item.note || "QQ 音乐"
               : item.mine
                 ? "我的歌单"
                 : item.note || "收藏"}

@@ -593,7 +593,9 @@ export default function App() {
       {loginPanel}
       <LibraryDrawer
         open={libraryOpen}
-        cookie={accounts.netease}
+        cookie={accounts[selectedId]}
+        sourceId={selectedId}
+        profile={profiles[selectedId]}
         onClose={() => setLibraryOpen(false)}
         onPlay={(tracks, index, sourceId) => {
           const from = allSources.find((item) => item.id === sourceId) ?? neteaseSource;
