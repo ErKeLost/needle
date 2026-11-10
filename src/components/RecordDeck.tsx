@@ -85,14 +85,14 @@ export function RecordDeck({ playing, progress, onToggle, title, artwork, spin }
         aria-label={playing ? `Pause ${title}` : `Play ${title}`}
       >
         <span className="disc">
-          <span
-            className="disc__art"
-            style={artwork ? { backgroundImage: `url("${artwork}")` } : undefined}
-          />
+          <span className="disc__art" />
           <span className="disc__grooves" />
           <span className="disc__edge" />
-          {!artwork && (
-          <span className="disc__label">
+          <span
+            className={artwork ? "disc__label is-art" : "disc__label"}
+            style={artwork ? { backgroundImage: `url("${artwork}")` } : undefined}
+          >
+            {!artwork && (
             <svg viewBox="0 0 100 100" aria-hidden>
               <defs>
                 <path id="label-arc-top" d="M 50,50 m -37,0 a 37,37 0 1,1 74,0" />
@@ -118,8 +118,8 @@ export function RecordDeck({ playing, progress, onToggle, title, artwork, spin }
                 33⅓ rpm
               </text>
             </svg>
+            )}
           </span>
-          )}
           <span className="disc__hole" />
         </span>
         <span className="disc__light" aria-hidden />
