@@ -6,6 +6,7 @@ type Props = {
   onToggle: () => void;
   title: string;
   artwork?: string;
+  palette?: string[];
   spin: boolean;
 };
 
@@ -29,7 +30,7 @@ const ticks = Array.from({ length: 91 }, (_, i) => {
   };
 });
 
-export function RecordDeck({ playing, progress, onToggle, title, artwork, spin }: Props) {
+export function RecordDeck({ playing, progress, onToggle, title, artwork, palette, spin }: Props) {
   const dot = useMemo(() => polar(ARC_START + ARC_SWEEP * progress, 50.6), [progress]);
 
   return (
@@ -86,6 +87,14 @@ export function RecordDeck({ playing, progress, onToggle, title, artwork, spin }
       >
         <span className="disc">
           <span className="disc__art" />
+          {palette && palette.length >= 3 && (
+            <span
+              className="disc__tint"
+              style={{
+                background: `linear-gradient(135deg, ${palette[0]} 0%, ${palette[1]} 52%, ${palette[2]} 100%)`,
+              }}
+            />
+          )}
           <span className="disc__grooves" />
           <span className="disc__edge" />
           <span

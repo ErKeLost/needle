@@ -74,6 +74,7 @@ export default function App() {
   const [searchSource, setSearchSource] = useState<MusicSource | null>(null);
   const [login, setLogin] = useState<{ id: string; after?: MusicSource } | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  const [palette, setPalette] = useState<string[]>([]);
   const openToken = useRef(0);
 
   const sources = useMemo(() => {
@@ -162,6 +163,21 @@ export default function App() {
   useEffect(() => {
     transport.setVolume(settings.volume);
   }, [settings.volume, transport]);
+
+  // Each cover presses its own colour into the vinyl.
+  useEffect(() => {
+    if (!track.artwork) {
+      setPalette([]);
+      return;
+    }
+    let alive = true;
+    void invoke<{ colors: string[] }>("cover_palette", { url: track.artwork })
+      .then((answer) => alive && setPalette(answer.colors))
+      .catch(() => alive && setPalette([]));
+    return () => {
+      alive = false;
+    };
+  }, [track.artwork]);
 
   // A stored cookie is enough to ask who it belongs to.
   useEffect(() => {
@@ -465,6 +481,7 @@ export default function App() {
           onToggle={toggle}
           title={track.title}
           artwork={settings.label === "art" ? track.artwork : undefined}
+          palette={palette}
           spin={settings.spin}
         />
 
