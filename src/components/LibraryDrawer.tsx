@@ -182,20 +182,18 @@ export function LibraryDrawer({ open, cookie, sourceId, profile, onClose, onPlay
               </div>
             ) : (
               <div className="drawer__list">
-                {(["netease", "qq"] as const).map((source) => {
-                  const group = charts.filter((item) => item.source === source);
-                  if (!group.length) return null;
-                  return (
-                    <div key={source}>
-                      <p className="drawer__section">
-                        {source === "qq" ? "QQ 音乐 · 排行榜" : "网易云音乐 · 排行榜"}
-                      </p>
-                      {group.map((item) => (
+                {charts.filter((item) => item.source === sourceId).length > 0 && (
+                  <>
+                    <p className="drawer__section">
+                      {sourceId === "qq" ? "QQ 音乐 · 排行榜" : "网易云音乐 · 排行榜"}
+                    </p>
+                    {charts
+                      .filter((item) => item.source === sourceId)
+                      .map((item) => (
                         <ShelfRow key={`${item.source}-${item.id}`} item={item} busy={busy} onOpen={openShelf} />
                       ))}
-                    </div>
-                  );
-                })}
+                  </>
+                )}
 
                 {shelves.length > 0 && (
                   <p className="drawer__section">
