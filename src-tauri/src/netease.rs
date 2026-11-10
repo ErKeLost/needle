@@ -664,14 +664,16 @@ pub async fn netease_library(cookie: String) -> Result<Value, String> {
     }))
 }
 
-/// One shelf, as tracks the player can queue.
+/// One shelf, as tracks the player can queue. The detail answer carries the
+/// name; the songs come from track/all, because detail no longer lists them.
 #[tauri::command]
 pub async fn netease_playlist(cookie: String, id: String) -> Result<Value, String> {
-    let body: Value = client()?
+    let http = client()?;
+    let detail: Value = http
         .get(format!("{SITE}/api/playlist/detail"))
         .query(&[("id", id.as_str()), ("n", "1000")])
         .header("Referer", referer())
-        .header("Cookie", cookie)
+        .header("Cookie", &cookie)
         .send()
         .await
         .map_err(|error| format!("网易云连不上：{error}"))?
@@ -679,11 +681,35 @@ pub async fn netease_playlist(cookie: String, id: String) -> Result<Value, Strin
         .await
         .map_err(|error| format!("网易云返回了无效数据：{error}"))?;
 
-    let songs = body
-        .pointer("/playlist/tracks")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
+    let songs: Vec<Value> = match http
+        .get(format!("{SITE}/api/playlist/track/all"))
+        .query(&[("id", id.as_str()), ("limit", "1000"), ("offset", "0")])
+        .header("Referer", referer())
+        .header("Cookie", &cookie)
+        .send()
+        .await
+    {
+        Ok(response) => match response.json::<Value>().await {
+            Ok(body) => body
+                .get("songs")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default(),
+            Err(_) => Vec::new(),
+        },
+        Err(_) => Vec::new(),
+    };
+
+    let songs = if songs.is_empty() {
+        detail
+            .pointer("/playlist/tracks")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default()
+    } else {
+        songs
+    };
+
     let tracks = songs
         .iter()
         .filter_map(|song| {
@@ -712,7 +738,7 @@ pub async fn netease_playlist(cookie: String, id: String) -> Result<Value, Strin
         .collect::<Vec<_>>();
 
     Ok(json!({
-        "name": body.pointer("/playlist/name").and_then(Value::as_str).unwrap_or(""),
+        "name": detail.pointer("/playlist/name").and_then(Value::as_str).unwrap_or(""),
         "tracks": tracks,
     }))
 }
