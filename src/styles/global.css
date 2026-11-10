@@ -3004,3 +3004,42 @@ kbd {
   mix-blend-mode: color;
   filter: none;
 }
+
+/* Vinyl is mostly black with colour in it, never a light plate. Darken the
+   marbling first, then let the album hue sit on top of that darkness. */
+.disc__art {
+  filter: grayscale(1) brightness(0.34) contrast(1.5);
+}
+
+.disc__tint {
+  opacity: 1;
+  mix-blend-mode: color;
+  filter: none;
+}
+
+.disc__grooves {
+  opacity: 0.3;
+  background: repeating-radial-gradient(
+    circle at 50% 50%,
+    rgba(255, 255, 255, 0.045) 0 1px,
+    rgba(0, 0, 0, 0.16) 1px 2px
+  );
+  mix-blend-mode: overlay;
+}
+
+.disc__light {
+  background:
+    radial-gradient(120% 120% at 4% -10%, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0) 46%),
+    conic-gradient(
+      from 196deg at 50% 50%,
+      rgba(255, 255, 255, 0) 0deg,
+      rgba(255, 255, 255, 0.2) 14deg,
+      rgba(255, 255, 255, 0.03) 34deg,
+      rgba(255, 255, 255, 0) 52deg,
+      rgba(255, 255, 255, 0) 150deg,
+      rgba(255, 255, 255, 0.12) 176deg,
+      rgba(255, 255, 255, 0) 206deg
+    );
+  mix-blend-mode: screen;
+  opacity: 0.9;
+}
