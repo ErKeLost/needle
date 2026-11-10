@@ -3043,3 +3043,33 @@ kbd {
   mix-blend-mode: screen;
   opacity: 0.9;
 }
+
+/* Tuned on a render: a black pressing with the album's colour in the
+   marbling, a soft gloss, and grooves you can just see. */
+.disc__art {
+  filter: grayscale(1) brightness(0.48) contrast(1.35);
+}
+
+.disc__grooves {
+  opacity: 0.6;
+  background: repeating-radial-gradient(
+    circle at 50% 50%,
+    rgba(255, 255, 255, 0.11) 0 1px,
+    rgba(0, 0, 0, 0.2) 1px 2.4px
+  );
+}
+
+.disc__light {
+  background:
+    radial-gradient(120% 120% at 6% -8%, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0) 42%),
+    conic-gradient(
+      from 196deg at 50% 50%,
+      rgba(255, 255, 255, 0) 0deg,
+      rgba(255, 255, 255, 0.13) 16deg,
+      rgba(255, 255, 255, 0.02) 38deg,
+      rgba(255, 255, 255, 0) 56deg,
+      rgba(255, 255, 255, 0) 150deg,
+      rgba(255, 255, 255, 0.08) 176deg,
+      rgba(255, 255, 255, 0) 206deg
+    );
+}
